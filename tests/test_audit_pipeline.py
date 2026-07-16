@@ -1,3 +1,8 @@
+import json
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from agentic_ai_funnel_audit.pipeline import AuditPipeline
@@ -72,3 +77,26 @@ def test_audit_pipeline_uses_feedback_history_and_policy_weights():
     assert result.policy["approval_threshold"] == 4
     assert result.feedback_adjustment != 0
     assert result.report["recommended_action"]
+
+
+def test_cli_exports_audit_report(tmp_path):
+    idea_path = tmp_path / "idea.json"
+    context_path = tmp_path / "context.json"
+    output_path = tmp_path / "report.json"
+
+    idea_path.write_text(json.dumps({"id": "idea-cli", "description": "A pilot for workflow automation", "dependencies": ["data-platform"], "workflow_overlap": 0, "trend_score": 4, "market_risk": 1, "strategic_fit": 4}), encoding="utf-8")
+    context_path.write_text(json.dumps({"data_maturity": 4, "competitor_signal": 3}), encoding="utf-8")
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "agentic_ai_funnel_audit.cli", "--idea-file", str(idea_path), "--context-file", str(context_path), "--output", str(output_path)],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parents[1],
+        check=True,
+    )
+
+    assert "idea-cli" in completed.stdout
+    assert output_path.exists()
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["idea_id"] == "idea-cli"
+    assert payload["report"]["recommended_action"]

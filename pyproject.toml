@@ -2,12 +2,20 @@
 name = "agentic-ai-funnel-audit"
 version = "0.1.0"
 description = "Agentic AI funnel audit starter implementation"
-authors = ["Namit Sehgal <sehgalnamit@example.com>"]
+authors = [{name = "Namit Sehgal", email = "sehgalnamit@example.com"}]
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic"
+]
 
 [project.urls]
 "homepage" = "https://github.com/sehgalnamit/agentic-ai-funnel-audit"
+
+[project.scripts]
+agentic-ai-funnel-audit = "agentic_ai_funnel_audit.cli:main"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
