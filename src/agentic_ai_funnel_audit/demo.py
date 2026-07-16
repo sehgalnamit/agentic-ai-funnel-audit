@@ -6,11 +6,13 @@ def main():
 
     idea = {
         "id": "idea-001",
+        "description": "Build a real-time analytics hub for enterprise workflow signals.",
         "dependencies": ["data-platform", "identity"],
         "workflow_overlap": 1,
         "trend_score": 4,
         "market_risk": 1,
         "strategic_fit": 4,
+        "contains_sensitive_concepts": False,
     }
 
     context = {
@@ -27,6 +29,8 @@ def main():
     print("ISO 56001 scores:")
     for domain, score in result.iso_scores.items():
         print(f"  {domain}: {score}")
+    print(f"Governance safe: {result.governance['is_safe']}")
+    print(f"Governance findings: {result.governance['findings']}")
     print(f"Final gate score: {result.final_score}")
     print(f"Pass gate: {result.pass_gate}")
 
