@@ -8,6 +8,18 @@ A focused starter project for decision support in enterprise innovation. This re
 
 This project turns those early funnel concepts into a defensible, audit-ready scorecard.
 
+## Where a CTAIO can use this
+
+This pattern is especially useful for a Chief Technology and AI Officer when the challenge is not ideation but disciplined prioritization. It helps turn early-stage innovation ideas into auditable decisions before engineering spend begins.
+
+Typical use cases include:
+- **Innovation portfolio screening**: evaluate which AI ideas should move forward before engineering investment
+- **Transformation program triage**: compare competing initiatives across feasibility, business value, and operating risk
+- **Capability investment decisions**: identify whether a proposal is blocked by weak data, unclear ownership, or poor fit
+- **Technology due diligence**: assess vendor ideas, platform bets, or AI pilots with a standardized scorecard
+- **Digital operating model reviews**: test whether new initiatives align with existing workflow and operating constraints
+- **Executive decision support**: replace gut-feel reviews with a traceable, auditable evaluation process
+
 ## Why this is useful
 
 This repo is not a generic idea generator. It is a decision support layer that:
@@ -161,22 +173,14 @@ If you want to deploy as part of a data-driven funnel, add a Cloud Run trigger f
 
 ## Next steps
 
-1. wire `Internal Operations Agent` to your 7-source UDP stream for real operational context
-2. replace placeholder scoring with prompt/LLM-based evaluation for richer reasoning
-3. extend ISO-style audit outputs into formal compliance artifacts and board-ready reports
-4. add an API or CLI for leaders to review gate results, overrides, and audit trails
-5. introduce a feedback loop where past outcomes improve future scoring logic and calibration
-
-## Where a CTAIO can use this
-
-This pattern is valuable for a Chief Technology and AI Officer when the challenge is not ideation but disciplined prioritization.
-
-- **Innovation portfolio screening**: evaluate which AI ideas should move forward before engineering investment
-- **Transformation program triage**: compare competing initiatives across feasibility, business value, and change risk
-- **Capability investment decisions**: identify whether a proposal is blocked by weak data, unclear ownership, or poor fit
-- **Technology due diligence**: assess vendor ideas, platform bets, or AI pilots with a standardized scorecard
-- **Digital operating model reviews**: test whether new initiatives align with existing workflow and operating constraints
-- **Executive decision support**: replace gut-feel reviews with a traceable, auditable evaluation process
+1. connect the pipeline to real operational data sources such as service telemetry, incident history, backlog health, and architecture metadata
+2. wire `Internal Operations Agent` to a richer context feed so it evaluates dependencies, delivery risk, and run-rate impact more realistically
+3. replace placeholder scoring with prompt-driven or model-based evaluation for deeper reasoning, particularly around business value and implementation risk
+4. add a leader-facing API and dashboard for reviewing gate results, overrides, and audit trails in one place
+5. export results into formal compliance artifacts, board-ready summaries, and portfolio review packs
+6. add policy hooks for organization-specific scoring weights, approval thresholds, and review workflows
+7. introduce a feedback loop where completed initiatives are scored against outcomes so future recommendations become better calibrated
+8. deploy the service into a production-ready GCP stack with Cloud Run, Artifact Registry, Secret Manager, and event-driven ingestion
 
 ## License
 
