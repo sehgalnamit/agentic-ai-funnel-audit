@@ -10,6 +10,7 @@ from .agents import (
     DeliberativeSandboxAgent,
 )
 from .governance import ModelArmor, SafetyAgent
+from .modeling import ModelEvaluator
 
 
 @dataclass
@@ -25,6 +26,7 @@ class AuditResult:
     policy: Dict[str, Any]
     feedback_adjustment: int
     report: Dict[str, Any]
+    artifact: Dict[str, Any]
 
 
 class AuditPipeline:
@@ -34,12 +36,15 @@ class AuditPipeline:
         self.deliberative_agent = DeliberativeSandboxAgent()
         self.safety_agent = SafetyAgent()
         self.model_armor = ModelArmor()
+        self.model_evaluator = ModelEvaluator()
 
     def run(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AuditResult:
         governance = self.model_armor.inspect(idea)
         safety = self.safety_agent.evaluate(idea, context)
         internal = self.internal_agent.evaluate(idea, context)
         market = self.market_agent.evaluate(idea, context)
+        model_insights = self._build_model_insights(idea, context)
+        internal, market = self._apply_model_insights(internal, market, model_insights)
         deliberative = self.deliberative_agent.evaluate([internal, market, safety])
 
         iso_scores = self._score_iso_domains(idea, internal, market, safety)
@@ -59,7 +64,8 @@ class AuditPipeline:
             and safety.score >= 3
             and governance["is_safe"]
         )
-        report = self._build_report(idea, context, iso_scores, final_score, pass_gate, governance, safety)
+        report = self._build_report(idea, context, iso_scores, final_score, pass_gate, governance, safety, model_insights)
+        artifact = self._build_audit_artifact(idea, context, iso_scores, final_score, pass_gate, governance, policy, report, model_insights)
 
         return AuditResult(
             idea_id=idea.get("id", "unknown"),
@@ -73,6 +79,7 @@ class AuditPipeline:
             policy=policy,
             feedback_adjustment=feedback_adjustment,
             report=report,
+            artifact=artifact,
         )
 
     def _score_iso_domains(
@@ -145,6 +152,39 @@ class AuditPipeline:
 
         return round(mean(matches) / max(1, len(matches)))
 
+    def _build_model_insights(self, idea: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.model_evaluator.is_enabled():
+            return {}
+
+        return {
+            "operational": self.model_evaluator.evaluate(idea, context, "operational"),
+            "market": self.model_evaluator.evaluate(idea, context, "market"),
+        }
+
+    def _apply_model_insights(
+        self,
+        internal: AgentEvaluation,
+        market: AgentEvaluation,
+        model_insights: Dict[str, Any],
+    ) -> tuple[AgentEvaluation, AgentEvaluation]:
+        if not model_insights:
+            return internal, market
+
+        operational_insight = model_insights.get("operational")
+        market_insight = model_insights.get("market")
+
+        if operational_insight:
+            internal.score = round((internal.score + operational_insight["score"]) / 2)
+            internal.rationale += " | Model-informed operational insight applied."
+            internal.details["model_operational"] = operational_insight
+
+        if market_insight:
+            market.score = round((market.score + market_insight["score"]) / 2)
+            market.rationale += " | Model-informed market insight applied."
+            market.details["model_market"] = market_insight
+
+        return internal, market
+
     def _build_report(
         self,
         idea: Dict[str, Any],
@@ -154,9 +194,10 @@ class AuditPipeline:
         pass_gate: bool,
         governance: Dict[str, Any],
         safety: AgentEvaluation,
+        model_insights: Dict[str, Any],
     ) -> Dict[str, Any]:
         recommended_action = "Proceed with a controlled pilot" if pass_gate else "Rework the proposal before funding"
-        return {
+        report = {
             "executive_summary": (
                 f"{idea.get('id', 'idea')} received a {final_score}/5 score and {'passed' if pass_gate else 'did not pass'} the review gate."
             ),
@@ -168,4 +209,40 @@ class AuditPipeline:
                 key for key in ["service_telemetry", "incident_history", "backlog_health", "architecture_metadata"]
                 if key in context
             ],
+        }
+
+        if model_insights:
+            report["model_insights"] = {
+                lens: {
+                    "score": insight["score"],
+                    "rationale": insight["rationale"],
+                }
+                for lens, insight in model_insights.items()
+            }
+
+        return report
+
+    def _build_audit_artifact(
+        self,
+        idea: Dict[str, Any],
+        context: Dict[str, Any],
+        iso_scores: Dict[str, int],
+        final_score: int,
+        pass_gate: bool,
+        governance: Dict[str, Any],
+        policy: Dict[str, Any],
+        report: Dict[str, Any],
+        model_insights: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return {
+            "idea": idea,
+            "context": context,
+            "iso_scores": iso_scores,
+            "final_score": final_score,
+            "pass_gate": pass_gate,
+            "governance": governance,
+            "policy": policy,
+            "report": report,
+            "model_insights": model_insights,
+            "generated_by": "agentic-ai-funnel-audit",
         }

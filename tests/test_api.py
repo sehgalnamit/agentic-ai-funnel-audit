@@ -45,6 +45,35 @@ def test_audit_endpoint():
     assert response.json()["report"]["executive_summary"]
 
 
+def test_audits_list_and_artifact_endpoints():
+    payload = {
+        "idea": {
+            "id": "idea-artifact",
+            "description": "A strong innovation review with traceability.",
+            "dependencies": ["data-platform"],
+            "workflow_overlap": 0,
+            "trend_score": 4,
+            "market_risk": 1,
+            "strategic_fit": 4,
+            "contains_sensitive_concepts": False,
+        },
+        "context": {
+            "data_maturity": 4,
+            "competitor_signal": 3,
+        },
+    }
+    audit_response = client.post("/audit", json=payload)
+    assert audit_response.status_code == 200
+
+    list_response = client.get("/audits")
+    assert list_response.status_code == 200
+    assert any(item["idea_id"] == "idea-artifact" for item in list_response.json())
+
+    artifact_response = client.get("/audit/idea-artifact/artifact")
+    assert artifact_response.status_code == 200
+    assert artifact_response.json()["idea"]["id"] == "idea-artifact"
+
+
 def test_dashboard_endpoint():
     response = client.get("/dashboard")
 
