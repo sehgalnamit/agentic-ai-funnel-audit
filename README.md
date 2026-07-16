@@ -1,6 +1,20 @@
 ﻿# agentic-ai-funnel-audit
 
-A focused starter project for building an Agentic AI decision layer that makes early-stage innovation assessment objective and auditable.
+A focused starter project for decision support in enterprise innovation. This repository solves a common early-funnel problem:
+
+- too many ideas are evaluated by opinion rather than objective risk signals
+- executive bias and HiPPO decisions dominate early-stage screening
+- engineering budgets are wasted when ideas move forward without operational, market, or governance validation
+
+This project turns those early funnel concepts into a defensible, audit-ready scorecard.
+
+## Why this is useful
+
+This repo is not a generic idea generator. It is a decision support layer that:
+- makes early funnel evaluation consistent and auditable
+- breaks executive bias by splitting assessment across specialist agents
+- captures safety and governance signals before ideas move to engineering
+- turns fuzzy innovation proposals into transparent, weighted decision outcomes
 
 ## Entry point
 
@@ -14,6 +28,38 @@ This root agent is responsible for:
 - aggregating scores through `DeliberativeSandbox`
 - mapping outputs to ISO-style audit scores
 - returning a gate/pass decision that leadership can trust
+
+## ADK framework and extensibility
+
+This repository follows a lightweight Agent Development Kit (ADK) pattern:
+
+- each agent is a self-contained evaluation unit with a defined `evaluate()` method
+- new agents can be added by implementing the same interface and plugging them into `AuditPipeline`
+- agent inputs and outputs are structured as dictionaries and `AgentEvaluation` objects
+- this format makes it easy to add new risk lenses without changing core orchestration logic
+
+### New agent format
+
+A new agent should provide:
+- a unique `name`
+- an `evaluate(idea, context)` implementation
+- an `AgentEvaluation` result containing `score`, `rationale`, and `details`
+
+Example:
+
+```python
+class NewRiskAgent(Agent):
+    def __init__(self):
+        super().__init__("New Risk Agent")
+
+    def evaluate(self, idea, context):
+        return AgentEvaluation(
+            name=self.name,
+            score=4,
+            rationale="...",
+            details={"example": True},
+        )
+```
 
 ## Root agent and sub-agent responsibilities
 
@@ -111,14 +157,6 @@ gcloud run deploy agentic-ai-funnel-audit \
 ```
 
 If you want to deploy as part of a data-driven funnel, add a Cloud Run trigger for Pub/Sub or HTTP event input.
-
-## Why this is useful
-
-This repo is not a generic idea generator. It is a decision support layer that:
-- makes early funnel evaluation consistent and auditable
-- breaks executive bias by splitting assessment across specialist agents
-- captures safety and governance signals before ideas move to engineering
-- turns fuzzy innovation proposals into transparent, weighted decision outcomes
 
 ## Next steps
 
