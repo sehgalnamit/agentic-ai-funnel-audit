@@ -1,0 +1,10 @@
+[project]
+name = "agentic-ai-funnel-audit"
+version = "0.1.0"
+description = "Agentic AI funnel audit starter implementation"
+authors = ["Namit Sehgal <sehgalnamit@example.com>"]
+readme = "README.md"
+requires-python = ">=3.11"
+
+[project.urls]
+"homepage" = "https://github.com/sehgalnamit/agentic-ai-funnel-audit"
