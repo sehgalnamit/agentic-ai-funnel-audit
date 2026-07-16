@@ -1,17 +1,132 @@
 ﻿# agentic-ai-funnel-audit
 
-A starter implementation for an Agentic AI funnel audit system. This repository contains a simple multi-agent evaluation framework for early-stage innovation screening, risk scoring, and ISO 56001-aligned audit trail generation.
+A focused starter project for building an Agentic AI decision layer that makes early-stage innovation assessment objective and auditable.
 
-## What’s included
+## Entry point
 
-- `src/agentic_ai_funnel_audit/agents.py` — agent classes for Internal Operations, Market Signal, and deliberative analysis
-- `src/agentic_ai_funnel_audit/pipeline.py` — workflow orchestration and scoring pipeline
-- `src/agentic_ai_funnel_audit/demo.py` — example execution of the audit pipeline
-- `README.md` — project overview and next steps
+The primary entry point is the `AuditPipeline` in `src/agentic_ai_funnel_audit/pipeline.py`.
+
+This root agent is responsible for:
+- receiving an idea payload and execution context
+- running governance checks through `ModelArmor`
+- computing safety risk with `SafetyAgent`
+- delegating internal and market assessments to specialized subagents
+- aggregating scores through `DeliberativeSandbox`
+- mapping outputs to ISO-style audit scores
+- returning a gate/pass decision that leadership can trust
+
+## Root agent and sub-agent responsibilities
+
+### Root agent: `AuditPipeline`
+- orchestrates the evaluation flow
+- ensures every idea passes through governance and safety before decision scoring
+- combines multiple agent views into a single objective outcome
+
+### Subagents
+- **ModelArmor** (`src/agentic_ai_funnel_audit/governance.py`)
+  - inspects idea content for governance readiness
+  - flags missing context, secrets, or prohibited language
+- **Safety Agent** (`src/agentic_ai_funnel_audit/governance.py`)
+  - detects proprietary or sensitive terms in idea descriptions
+  - adds a safety score into the gate decision
+- **Internal Operations Agent** (`src/agentic_ai_funnel_audit/agents.py`)
+  - evaluates dependencies, workflow overlap, and data maturity
+  - identifies operational risk before engineering begins
+- **Market Signal Agent** (`src/agentic_ai_funnel_audit/agents.py`)
+  - evaluates trends, competitor signals, and market risk
+  - highlights external validation and opportunity risk
+- **Deliberative Sandbox** (`src/agentic_ai_funnel_audit/agents.py`)
+  - aggregates specialized scores
+  - simulates a deliberation debate to detect weak-link risk
+
+## Dataflow
+
+```mermaid
+flowchart TD
+    A[Idea Intake] --> B[ModelArmor Governance Scan]
+    B --> C[Safety Agent]
+    C --> D[Internal Operations Agent]
+    C --> E[Market Signal Agent]
+    D --> F[Deliberative Sandbox]
+    E --> F
+    C --> F
+    F --> G[ISO-Style Scorecard]
+    G --> H[Gate Decision]
+```
+
+## Root subagent dataflow
+
+```mermaid
+flowchart LR
+    Idea[Idea Record] --> Governance[ModelArmor]
+    Governance --> Safety[Safety Agent]
+    Safety --> Ops[Internal Operations Agent]
+    Safety --> Market[Market Signal Agent]
+    Ops --> Debate[Deliberative Sandbox]
+    Market --> Debate
+    Safety --> Debate
+    Debate --> Audit[AuditResult]
+```
+
+## What this repo contains
+
+- `src/agentic_ai_funnel_audit/agents.py` — operational, market, and deliberative agent logic
+- `src/agentic_ai_funnel_audit/governance.py` — governance and content safety checks
+- `src/agentic_ai_funnel_audit/pipeline.py` — the root audit orchestration pipeline
+- `src/agentic_ai_funnel_audit/demo.py` — a runnable demo for the audit workflow
+- `tests/` — automated pytest coverage for pipeline and governance behavior
+
+## How to run locally
+
+```bash
+python -m src.agentic_ai_funnel_audit.demo
+```
+
+## Deploy on GCP
+
+This project is well-suited for a simple GCP container deployment:
+
+1. containerize the app with a `Dockerfile`
+2. build and push the image to Artifact Registry or Container Registry
+3. deploy it to Cloud Run for serverless execution, or Cloud Run on GKE for more control
+
+A recommended GCP stack:
+- **Artifact Registry** for storing container images
+- **Cloud Build** for CI/CD packaging
+- **Cloud Run** for scalable serverless deployment
+- **Secret Manager** for any credentials or model keys
+- **Pub/Sub** or **Workflows** if you want to connect the idea intake pipeline to external event streams
+
+### Example deployment flow
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_GCP_PROJECT
+gcloud builds submit --tag us-central1-docker.pkg.dev/YOUR_GCP_PROJECT/agentic-ai-funnel-audit/agentic-ai-funnel-audit:latest
+gcloud run deploy agentic-ai-funnel-audit \
+  --image us-central1-docker.pkg.dev/YOUR_GCP_PROJECT/agentic-ai-funnel-audit/agentic-ai-funnel-audit:latest \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated
+```
+
+If you want to deploy as part of a data-driven funnel, add a Cloud Run trigger for Pub/Sub or HTTP event input.
+
+## Why this is useful
+
+This repo is not a generic idea generator. It is a decision support layer that:
+- makes early funnel evaluation consistent and auditable
+- breaks executive bias by splitting assessment across specialist agents
+- captures safety and governance signals before ideas move to engineering
+- turns fuzzy innovation proposals into transparent, weighted decision outcomes
 
 ## Next steps
 
-1. Extend agent evaluation logic with real data ingestion from your 7-source UDP stream.
-2. Add prompt templates and LLM integration for agent deliberation.
-3. Map scoring output to ISO 56001 domains and audit artifacts.
-4. Add unit tests and a CLI or web layer for gating decisions.
+1. wire `Internal Operations Agent` to your 7-source UDP stream
+2. swap placeholder scoring with prompt/LLM-based evaluation
+3. extend ISO-style audit outputs into formal compliance artifacts
+4. add an API or CLI for leaders to review gate results
+
+## License
+
+MIT
