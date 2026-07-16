@@ -132,8 +132,12 @@ flowchart LR
 - `src/agentic_ai_funnel_audit/agents.py` — operational, market, and deliberative agent logic
 - `src/agentic_ai_funnel_audit/governance.py` — governance and content safety checks
 - `src/agentic_ai_funnel_audit/pipeline.py` — the root audit orchestration pipeline
+- `src/agentic_ai_funnel_audit/modeling.py` — optional model-driven scoring with OpenAI integration
+- `src/agentic_ai_funnel_audit/storage.py` — in-memory audit history and override persistence
+- `src/agentic_ai_funnel_audit/api.py` — FastAPI service with audit endpoints and dashboard
+- `src/agentic_ai_funnel_audit/cli.py` — CLI for file-based audit runs and JSON exports
 - `src/agentic_ai_funnel_audit/demo.py` — a runnable demo for the audit workflow
-- `tests/` — automated pytest coverage for pipeline and governance behavior
+- `tests/` — automated pytest coverage for pipeline, API, and governance behavior
 
 ## How to run locally
 
@@ -190,16 +194,21 @@ gcloud run deploy agentic-ai-funnel-audit \
 
 If you want to deploy as part of a data-driven funnel, add a Cloud Run trigger for Pub/Sub or HTTP event input.
 
+## Completed features
+
+- ✅ model-driven and prompt-based evaluation through optional OpenAI integration
+- ✅ leader-facing API and dashboard for reviewing gate results, overrides, and audit trails
+- ✅ formal audit artifacts and exportable compliance reports
+- ✅ policy hooks for organization-specific scoring weights and approval thresholds
+- ✅ feedback loop infrastructure for outcome-based recommendation calibration
+- ✅ CLI for batch processing and JSON exports
+
 ## Next steps
 
 1. connect the pipeline to real operational data sources such as service telemetry, incident history, backlog health, and architecture metadata
 2. wire `Internal Operations Agent` to a richer context feed so it evaluates dependencies, delivery risk, and run-rate impact more realistically
-3. replace placeholder scoring with prompt-driven or model-based evaluation for deeper reasoning, particularly around business value and implementation risk
-4. add a leader-facing API and dashboard for reviewing gate results, overrides, and audit trails in one place
-5. export results into formal compliance artifacts, board-ready summaries, and portfolio review packs
-6. add policy hooks for organization-specific scoring weights, approval thresholds, and review workflows
-7. introduce a feedback loop where completed initiatives are scored against outcomes so future recommendations become better calibrated
-8. deploy the service into a production-ready GCP stack with Cloud Run, Artifact Registry, Secret Manager, and event-driven ingestion
+3. deploy the service into a production-ready GCP stack with Cloud Run, Artifact Registry, Secret Manager, and event-driven ingestion
+4. build outcome-tracking connectors to capture post-decision data so feedback loops can improve future recommendations
 
 ## License
 
