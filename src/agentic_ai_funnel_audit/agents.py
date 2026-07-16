@@ -27,7 +27,24 @@ class InternalOperationsAgent(Agent):
         dependencies = idea.get("dependencies", [])
         data_maturity = context.get("data_maturity", 0)
         workflow_overlap = idea.get("workflow_overlap", 0)
-        risk_score = min(5, max(1, 5 - data_maturity + len(dependencies) + workflow_overlap))
+        service_telemetry = context.get("service_telemetry") or {}
+        incident_history = context.get("incident_history") or {}
+        backlog_health = context.get("backlog_health") or {}
+        architecture_metadata = context.get("architecture_metadata") or {}
+
+        risk_penalty = 0
+        if service_telemetry.get("slo_breach_count", 0) > 0:
+            risk_penalty += 1
+        if service_telemetry.get("uptime", 100) < 99.0:
+            risk_penalty += 1
+        if incident_history.get("severity", 0) >= 3:
+            risk_penalty += 1
+        if backlog_health.get("delivery_velocity", 3) <= 2:
+            risk_penalty += 1
+        if architecture_metadata.get("legacy_systems", 0) > 2:
+            risk_penalty += 1
+
+        risk_score = min(5, max(1, 5 - data_maturity + len(dependencies) + workflow_overlap - risk_penalty))
 
         rationale = (
             f"Dependencies: {len(dependencies)}, "
@@ -43,6 +60,10 @@ class InternalOperationsAgent(Agent):
                 "dependencies": dependencies,
                 "data_maturity": data_maturity,
                 "workflow_overlap": workflow_overlap,
+                "service_telemetry": service_telemetry,
+                "incident_history": incident_history,
+                "backlog_health": backlog_health,
+                "architecture_metadata": architecture_metadata,
             },
         )
 

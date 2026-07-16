@@ -47,3 +47,28 @@ def test_audit_pipeline_fails_gate_on_low_strategic_alignment():
 
     assert result.iso_scores["Strategic Alignment"] == 1
     assert result.pass_gate is False
+
+
+def test_audit_pipeline_uses_feedback_history_and_policy_weights():
+    pipeline = AuditPipeline()
+
+    idea = {
+        "id": "idea-003",
+        "dependencies": ["data-platform"],
+        "workflow_overlap": 1,
+        "trend_score": 4,
+        "market_risk": 1,
+        "strategic_fit": 4,
+    }
+    context = {
+        "data_maturity": 4,
+        "competitor_signal": 3,
+        "policy": {"approval_threshold": 4, "weights": {"operational": 0.4, "market": 0.3, "governance": 0.3}},
+        "feedback_history": [{"signature": {"strategic_fit": 4, "data_maturity": 4}, "outcome_score": 4}],
+    }
+
+    result = pipeline.run(idea, context)
+
+    assert result.policy["approval_threshold"] == 4
+    assert result.feedback_adjustment != 0
+    assert result.report["recommended_action"]
