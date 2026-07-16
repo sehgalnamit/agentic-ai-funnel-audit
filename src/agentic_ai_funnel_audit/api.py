@@ -6,11 +6,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .pipeline import AuditPipeline
 from .storage import AuditStore
+from .connectors import OperationalDataFetcher
+from .outcomes import OutcomeStore, OutcomeRecord, FeedbackLoopCalibrator
 
 app = FastAPI(title="Agentic AI Funnel Audit")
 
 pipeline = AuditPipeline()
 audit_store = AuditStore()
+data_fetcher = OperationalDataFetcher()
+outcome_store = OutcomeStore()
+calibrator = FeedbackLoopCalibrator(outcome_store)
 
 
 class IdeaRequest(BaseModel):
@@ -38,6 +43,21 @@ class IdeaContext(BaseModel):
 class AuditPayload(BaseModel):
     idea: IdeaRequest
     context: IdeaContext | None = Field(default=None)
+    service_id: str | None = Field(default=None)
+    team_id: str | None = Field(default=None)
+
+
+class OutcomeRequest(BaseModel):
+    idea_id: str
+    outcome_status: str
+    implementation_duration_weeks: int
+    actual_delivery_cost: float
+    actual_team_velocity_impact: int
+    business_value_realized: int
+    risk_incidents_count: int
+    technical_debt_added: int
+    process_improvements: list[str] = []
+    lessons_learned: str = ""
 
 
 @app.get("/")
@@ -150,4 +170,79 @@ def override_audit(idea_id: str, override: AuditOverrideRequest):
         "idea_id": updated.idea_id,
         "override": updated.override,
         "created_at": updated.created_at,
+    }
+
+
+@app.get("/audit/{idea_id}/enrich")
+def enrich_context(idea_id: str, service_id: str | None = None, team_id: str | None = None):
+    """Fetch and enrich context from operational data sources."""
+    if not service_id or not team_id:
+        raise HTTPException(status_code=400, detail="service_id and team_id are required.")
+
+    enriched = data_fetcher.fetch_all_context(service_id, team_id)
+    return {
+        "idea_id": idea_id,
+        "enriched_context": enriched,
+    }
+
+
+@app.post("/outcomes")
+def record_outcome(outcome_payload: OutcomeRequest):
+    """Record an outcome for a completed idea."""
+    outcome = OutcomeRecord(
+        idea_id=outcome_payload.idea_id,
+        outcome_status=outcome_payload.outcome_status,
+        implementation_duration_weeks=outcome_payload.implementation_duration_weeks,
+        actual_delivery_cost=outcome_payload.actual_delivery_cost,
+        actual_team_velocity_impact=outcome_payload.actual_team_velocity_impact,
+        business_value_realized=outcome_payload.business_value_realized,
+        risk_incidents_count=outcome_payload.risk_incidents_count,
+        technical_debt_added=outcome_payload.technical_debt_added,
+        process_improvements=outcome_payload.process_improvements,
+        lessons_learned=outcome_payload.lessons_learned,
+    )
+    recorded = outcome_store.record_outcome(outcome_payload.idea_id, outcome)
+    return {
+        "idea_id": recorded.idea_id,
+        "outcome_status": recorded.outcome_status,
+        "feedback_signal": recorded.to_feedback_signal(),
+    }
+
+
+@app.get("/outcomes")
+def list_outcomes():
+    """List all recorded outcomes."""
+    return [
+        {
+            "idea_id": o.idea_id,
+            "outcome_status": o.outcome_status,
+            "created_at": o.created_at,
+            "feedback_signal": o.to_feedback_signal(),
+        }
+        for o in outcome_store.list_outcomes()
+    ]
+
+
+@app.get("/outcomes/{idea_id}")
+def get_outcome(idea_id: str):
+    """Get outcome for a specific idea."""
+    outcome = outcome_store.get_outcome(idea_id)
+    if not outcome:
+        raise HTTPException(status_code=404, detail="Outcome not found.")
+    return {
+        "idea_id": outcome.idea_id,
+        "outcome_status": outcome.outcome_status,
+        "created_at": outcome.created_at,
+        "feedback_signal": outcome.to_feedback_signal(),
+    }
+
+
+@app.get("/calibration")
+def get_calibration_factors():
+    """Get feedback loop calibration factors."""
+    factors = outcome_store.compute_calibration_factors()
+    return {
+        "calibration_factors": factors,
+        "total_outcomes_recorded": len(outcome_store.list_outcomes()),
+        "feedback_history_size": len(outcome_store.get_feedback_history()),
     }

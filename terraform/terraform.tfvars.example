@@ -1,0 +1,5 @@
+project_id           = "YOUR_GCP_PROJECT_ID"
+region               = "us-central1"
+enable_model_scoring = true
+container_image_tag  = "latest"
+enable_public_access = true

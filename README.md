@@ -134,10 +134,14 @@ flowchart LR
 - `src/agentic_ai_funnel_audit/pipeline.py` — the root audit orchestration pipeline
 - `src/agentic_ai_funnel_audit/modeling.py` — optional model-driven scoring with OpenAI integration
 - `src/agentic_ai_funnel_audit/storage.py` — in-memory audit history and override persistence
-- `src/agentic_ai_funnel_audit/api.py` — FastAPI service with audit endpoints and dashboard
+- `src/agentic_ai_funnel_audit/connectors.py` — pluggable data connectors for operational telemetry, incidents, backlog, and architecture metadata
+- `src/agentic_ai_funnel_audit/outcomes.py` — outcome tracking and feedback loop calibration
+- `src/agentic_ai_funnel_audit/api.py` — FastAPI service with audit, enrichment, outcomes, and calibration endpoints
 - `src/agentic_ai_funnel_audit/cli.py` — CLI for file-based audit runs and JSON exports
 - `src/agentic_ai_funnel_audit/demo.py` — a runnable demo for the audit workflow
-- `tests/` — automated pytest coverage for pipeline, API, and governance behavior
+- `terraform/` — production-ready GCP infrastructure as code (Cloud Run, Artifact Registry, Secret Manager, Pub/Sub, Cloud Storage)
+- `GCP_DEPLOYMENT.md` — step-by-step GCP deployment guide
+- `tests/` — automated pytest coverage for pipeline, API, governance, and connectors
 
 ## How to run locally
 
@@ -157,7 +161,13 @@ Available endpoints:
 - `GET /audits` - list saved audit entries
 - `GET /audit/{idea_id}` - retrieve a saved audit entry
 - `GET /audit/{idea_id}/artifact` - download the formal audit artifact
+- `GET /audit/{idea_id}/enrich` - fetch enriched context from operational data sources (requires `service_id` and `team_id` query params)
 - `POST /audit/{idea_id}/override` - apply an executive override to a saved audit
+- `GET /dashboard` - HTML dashboard with audit history
+- `POST /outcomes` - record an outcome for a completed idea
+- `GET /outcomes` - list all recorded outcomes
+- `GET /outcomes/{idea_id}` - get outcome for a specific idea
+- `GET /calibration` - get feedback loop calibration factors
 
 If you want model-driven scoring, set environment variables before running the service:
 - `OPENAI_API_KEY` - your OpenAI credential
@@ -200,15 +210,28 @@ If you want to deploy as part of a data-driven funnel, add a Cloud Run trigger f
 - ✅ leader-facing API and dashboard for reviewing gate results, overrides, and audit trails
 - ✅ formal audit artifacts and exportable compliance reports
 - ✅ policy hooks for organization-specific scoring weights and approval thresholds
-- ✅ feedback loop infrastructure for outcome-based recommendation calibration
+- ✅ feedback loop infrastructure with outcome tracking and recommendation calibration
 - ✅ CLI for batch processing and JSON exports
+- ✅ pluggable operational data connectors (telemetry, incidents, backlog, architecture)
+- ✅ event-driven ingestion via Pub/Sub
+- ✅ production-ready GCP deployment (Cloud Run, Artifact Registry, Secret Manager)
+
+## Production Deployment
+
+See [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) for detailed instructions on deploying to Google Cloud Platform.
+
+Quick steps:
+1. Build and push the container image to Artifact Registry
+2. Use Terraform to provision Cloud Run, secrets, and event-driven infrastructure
+3. Set secret values for API keys and data source configurations
+4. Access the service via the Cloud Run URL
 
 ## Next steps
 
-1. connect the pipeline to real operational data sources such as service telemetry, incident history, backlog health, and architecture metadata
-2. wire `Internal Operations Agent` to a richer context feed so it evaluates dependencies, delivery risk, and run-rate impact more realistically
-3. deploy the service into a production-ready GCP stack with Cloud Run, Artifact Registry, Secret Manager, and event-driven ingestion
-4. build outcome-tracking connectors to capture post-decision data so feedback loops can improve future recommendations
+1. integrate with real data sources: Datadog for telemetry, PagerDuty for incidents, Jira for backlog, custom CMDBs for architecture metadata
+2. build frontend dashboard for reviewers and executives with audit visualization and override workflows
+3. implement custom approval workflows and notification triggers (email, Slack, Teams)
+4. add analytics and compliance reporting for audit history
 
 ## License
 

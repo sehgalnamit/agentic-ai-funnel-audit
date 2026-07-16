@@ -112,3 +112,50 @@ def test_audit_override():
     assert override_response.status_code == 200
     assert override_response.json()["idea_id"] == "idea-override"
     assert override_response.json()["override"]["approved"] is True
+
+
+def test_enrich_context_endpoint():
+    response = client.get("/audit/idea-001/enrich?service_id=analytics-service&team_id=platform-team")
+    assert response.status_code == 200
+    assert "enriched_context" in response.json()
+    assert "service_telemetry" in response.json()["enriched_context"]
+    assert "incident_history" in response.json()["enriched_context"]
+    assert "backlog_health" in response.json()["enriched_context"]
+    assert "architecture_metadata" in response.json()["enriched_context"]
+
+
+def test_record_and_list_outcomes():
+    outcome_payload = {
+        "idea_id": "idea-outcome-001",
+        "outcome_status": "success",
+        "implementation_duration_weeks": 8,
+        "actual_delivery_cost": 250000,
+        "actual_team_velocity_impact": 2,
+        "business_value_realized": 5,
+        "risk_incidents_count": 0,
+        "technical_debt_added": 1,
+        "process_improvements": ["automated-testing"],
+        "lessons_learned": "Strong execution and team alignment",
+    }
+    
+    response = client.post("/outcomes", json=outcome_payload)
+    assert response.status_code == 200
+    assert response.json()["idea_id"] == "idea-outcome-001"
+    assert response.json()["outcome_status"] == "success"
+    assert "feedback_signal" in response.json()
+
+    list_response = client.get("/outcomes")
+    assert list_response.status_code == 200
+    assert any(o["idea_id"] == "idea-outcome-001" for o in list_response.json())
+
+    get_response = client.get("/outcomes/idea-outcome-001")
+    assert get_response.status_code == 200
+    assert get_response.json()["idea_id"] == "idea-outcome-001"
+
+
+def test_calibration_endpoint():
+    response = client.get("/calibration")
+    assert response.status_code == 200
+    assert "calibration_factors" in response.json()
+    assert "total_outcomes_recorded" in response.json()
+    assert "feedback_history_size" in response.json()
