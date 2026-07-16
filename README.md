@@ -141,6 +141,25 @@ flowchart LR
 python -m src.agentic_ai_funnel_audit.demo
 ```
 
+The API can also be run via the FastAPI service:
+
+```bash
+uvicorn agentic_ai_funnel_audit.api:app --host 0.0.0.0 --port 8000
+```
+
+Available endpoints:
+- `GET /` - health check
+- `POST /audit` - submit an idea + context for audit scoring
+- `GET /audits` - list saved audit entries
+- `GET /audit/{idea_id}` - retrieve a saved audit entry
+- `GET /audit/{idea_id}/artifact` - download the formal audit artifact
+- `POST /audit/{idea_id}/override` - apply an executive override to a saved audit
+
+If you want model-driven scoring, set environment variables before running the service:
+- `OPENAI_API_KEY` - your OpenAI credential
+- `AGENTIC_USE_MODEL=true` - enable the optional scoring model
+- `AGENTIC_MODEL_NAME` - optional model name, defaults to `gpt-4o-mini`
+
 ## Deploy on GCP
 
 This project is well-suited for a simple GCP container deployment:

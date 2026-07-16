@@ -61,6 +61,7 @@ def audit_idea(payload: AuditPayload):
             "policy": result.policy,
             "feedback_adjustment": result.feedback_adjustment,
             "report": result.report,
+            "artifact": result.artifact,
         },
     })
 
@@ -73,6 +74,7 @@ def audit_idea(payload: AuditPayload):
         "policy": result.policy,
         "feedback_adjustment": result.feedback_adjustment,
         "report": result.report,
+        "artifact": result.artifact,
         "deliberation": {
             "name": result.deliberation.name,
             "score": result.deliberation.score,
@@ -96,9 +98,39 @@ def dashboard():
         <p>This dashboard shows audit review history and override status.</p>
         <ul>{rows}</ul>
         <p>Use the /audit endpoint to submit an idea and /audit/{'{idea_id}'}/override to apply an executive override.</p>
+        <p>Use /audits to fetch all saved audit entries and /audit/{'{idea_id}'}/artifact to download the audit artifact.</p>
       </body>
     </html>
     """
+
+
+@app.get("/audits")
+def list_audits():
+    return [entry.to_summary() for entry in audit_store.list()]
+
+
+@app.get("/audit/{idea_id}")
+def get_audit(idea_id: str):
+    entry = audit_store.get(idea_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Audit entry not found.")
+    return {
+        "idea_id": entry.idea_id,
+        "created_at": entry.created_at,
+        "override": entry.override,
+        "payload": entry.payload,
+    }
+
+
+@app.get("/audit/{idea_id}/artifact")
+def get_audit_artifact(idea_id: str):
+    entry = audit_store.get(idea_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Audit entry not found.")
+    artifact = entry.payload.get("result", {}).get("artifact")
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Audit artifact not available.")
+    return artifact
 
 
 class AuditOverrideRequest(BaseModel):
