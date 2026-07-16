@@ -22,7 +22,7 @@ The primary entry point is the `AuditPipeline` in `src/agentic_ai_funnel_audit/p
 
 This root agent is responsible for:
 - receiving an idea payload and execution context
-- running governance checks through `ModelArmor`
+- running governance inspections through `ModelArmor`
 - computing safety risk with `SafetyAgent`
 - delegating internal and market assessments to specialized subagents
 - aggregating scores through `DeliberativeSandbox`
@@ -70,8 +70,9 @@ class NewRiskAgent(Agent):
 
 ### Subagents
 - **ModelArmor** (`src/agentic_ai_funnel_audit/governance.py`)
-  - inspects idea content for governance readiness
-  - flags missing context, secrets, or prohibited language
+  - acts as a governance and model-safety guardrail
+  - checks idea content for missing context, proprietary language, and other risk signals
+  - does not serve as a jailbreak tool in this design; it is a policy checker for idea intake
 - **Safety Agent** (`src/agentic_ai_funnel_audit/governance.py`)
   - detects proprietary or sensitive terms in idea descriptions
   - adds a safety score into the gate decision
@@ -160,10 +161,22 @@ If you want to deploy as part of a data-driven funnel, add a Cloud Run trigger f
 
 ## Next steps
 
-1. wire `Internal Operations Agent` to your 7-source UDP stream
-2. swap placeholder scoring with prompt/LLM-based evaluation
-3. extend ISO-style audit outputs into formal compliance artifacts
-4. add an API or CLI for leaders to review gate results
+1. wire `Internal Operations Agent` to your 7-source UDP stream for real operational context
+2. replace placeholder scoring with prompt/LLM-based evaluation for richer reasoning
+3. extend ISO-style audit outputs into formal compliance artifacts and board-ready reports
+4. add an API or CLI for leaders to review gate results, overrides, and audit trails
+5. introduce a feedback loop where past outcomes improve future scoring logic and calibration
+
+## Where a CTAIO can use this
+
+This pattern is valuable for a Chief Technology and AI Officer when the challenge is not ideation but disciplined prioritization.
+
+- **Innovation portfolio screening**: evaluate which AI ideas should move forward before engineering investment
+- **Transformation program triage**: compare competing initiatives across feasibility, business value, and change risk
+- **Capability investment decisions**: identify whether a proposal is blocked by weak data, unclear ownership, or poor fit
+- **Technology due diligence**: assess vendor ideas, platform bets, or AI pilots with a standardized scorecard
+- **Digital operating model reviews**: test whether new initiatives align with existing workflow and operating constraints
+- **Executive decision support**: replace gut-feel reviews with a traceable, auditable evaluation process
 
 ## License
 
