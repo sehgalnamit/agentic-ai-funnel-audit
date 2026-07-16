@@ -50,4 +50,36 @@ def test_dashboard_endpoint():
 
     assert response.status_code == 200
     assert "CTAO" in response.text
-    assert "audit form" in response.text.lower()
+    assert "use the /audit endpoint" in response.text.lower()
+
+
+def test_audit_override():
+    payload = {
+        "idea": {
+            "id": "idea-override",
+            "description": "A strategic innovation proposal for workflow optimization.",
+            "dependencies": ["data-platform"],
+            "workflow_overlap": 0,
+            "trend_score": 4,
+            "market_risk": 1,
+            "strategic_fit": 4,
+            "contains_sensitive_concepts": False,
+        },
+        "context": {
+            "data_maturity": 4,
+            "competitor_signal": 3,
+        },
+    }
+    response = client.post("/audit", json=payload)
+    assert response.status_code == 200
+
+    override_payload = {
+        "override_reason": "Executive decision to fund a pilot despite the score.",
+        "approved": True,
+        "reviewer": "CTO",
+    }
+    override_response = client.post("/audit/idea-override/override", json=override_payload)
+
+    assert override_response.status_code == 200
+    assert override_response.json()["idea_id"] == "idea-override"
+    assert override_response.json()["override"]["approved"] is True

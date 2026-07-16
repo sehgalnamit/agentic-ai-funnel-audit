@@ -1,14 +1,16 @@
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .pipeline import AuditPipeline
+from .storage import AuditStore
 
 app = FastAPI(title="Agentic AI Funnel Audit")
 
 pipeline = AuditPipeline()
+audit_store = AuditStore()
 
 
 class IdeaRequest(BaseModel):
@@ -48,6 +50,19 @@ def audit_idea(payload: AuditPayload):
     idea = payload.idea.model_dump()
     context_data = payload.context.model_dump() if payload.context else {}
     result = pipeline.run(idea, context_data)
+    audit_store.save(idea_id=result.idea_id, payload={
+        "idea": idea,
+        "context": context_data,
+        "result": {
+            "final_score": result.final_score,
+            "pass_gate": result.pass_gate,
+            "iso_scores": result.iso_scores,
+            "governance": result.governance,
+            "policy": result.policy,
+            "feedback_adjustment": result.feedback_adjustment,
+            "report": result.report,
+        },
+    })
 
     return {
         "idea_id": result.idea_id,
@@ -68,13 +83,39 @@ def audit_idea(payload: AuditPayload):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
-    return """
+    entries = audit_store.list()
+    rows = "".join(
+        f"<li><strong>{entry.idea_id}</strong> @ {entry.created_at} - override={entry.override is not None}</li>"
+        for entry in entries
+    )
+    return f"""
     <html>
       <head><title>CTAO Innovation Audit Dashboard</title></head>
       <body>
         <h1>CTAO Innovation Audit Dashboard</h1>
-        <p>This dashboard is a simple entry point for the audit form and review workflow.</p>
-        <p>Use the /audit endpoint to submit an idea and receive a structured executive report.</p>
+        <p>This dashboard shows audit review history and override status.</p>
+        <ul>{rows}</ul>
+        <p>Use the /audit endpoint to submit an idea and /audit/{'{idea_id}'}/override to apply an executive override.</p>
       </body>
     </html>
     """
+
+
+class AuditOverrideRequest(BaseModel):
+    override_reason: str
+    approved: bool
+    reviewer: str
+
+
+@app.post("/audit/{idea_id}/override")
+def override_audit(idea_id: str, override: AuditOverrideRequest):
+    entry = audit_store.get(idea_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Audit entry not found.")
+
+    updated = audit_store.override(idea_id, override_payload=override.model_dump())
+    return {
+        "idea_id": updated.idea_id,
+        "override": updated.override,
+        "created_at": updated.created_at,
+    }
