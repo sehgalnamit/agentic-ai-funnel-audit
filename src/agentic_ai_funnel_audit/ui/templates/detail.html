@@ -10,17 +10,84 @@
     <dt class="col-sm-3">Created</dt><dd class="col-sm-9">{{ entry.created_at }}</dd>
   </dl>
 
+  {% if entry.audit_result %}
+    {% set ar = entry.audit_result %}
+    {% if ar.error %}
+      <div class="alert alert-warning">Pipeline error: {{ ar.error }}</div>
+    {% else %}
+      <div class="card mb-4 border-{{ 'success' if ar.pass_gate else 'danger' }}">
+        <div class="card-header bg-{{ 'success' if ar.pass_gate else 'danger' }} text-white d-flex justify-content-between align-items-center">
+          <strong>Multi-Agent Gate Decision</strong>
+          <span class="badge bg-light text-dark fs-6">
+            {{ '✅ PASS' if ar.pass_gate else '❌ FAIL' }} &nbsp; Score: {{ ar.final_score }}/5
+          </span>
+        </div>
+        <div class="card-body">
+
+          <h6 class="mt-2">ISO Domain Scores</h6>
+          <div class="row mb-3">
+            {% for domain, score in ar.iso_scores.items() %}
+              <div class="col-sm-6 col-md-3 mb-2">
+                <div class="card text-center">
+                  <div class="card-body py-2">
+                    <div class="fs-4 fw-bold">{{ score }}/5</div>
+                    <div class="small text-muted">{{ domain }}</div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <h6>Agent Evaluations</h6>
+          <div class="accordion mb-3" id="agentAccordion">
+            {% for ev in ar.evaluations %}
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#agent{{ loop.index }}">
+                    {{ ev.name }} &mdash; Score: <strong class="ms-1">{{ ev.score }}/5</strong>
+                  </button>
+                </h2>
+                <div id="agent{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#agentAccordion">
+                  <div class="accordion-body">{{ ev.rationale }}</div>
+                </div>
+              </div>
+            {% endfor %}
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#agentDelib">
+                  {{ ar.deliberation.name }} &mdash; Score: <strong class="ms-1">{{ ar.deliberation.score }}/5</strong>
+                </button>
+              </h2>
+              <div id="agentDelib" class="accordion-collapse collapse" data-bs-parent="#agentAccordion">
+                <div class="accordion-body">{{ ar.deliberation.rationale }}</div>
+              </div>
+            </div>
+          </div>
+
+          <h6>Governance &amp; Safety</h6>
+          <p class="mb-1">
+            Safety score: <strong>{{ ar.safety.score }}/5</strong> &mdash; {{ ar.safety.rationale }}
+          </p>
+          <p class="text-muted small">
+            Governance: {{ 'Safe ✅' if ar.governance.is_safe else 'Flagged ⚠️' }}
+            {% if ar.governance.flags %} &mdash; Flags: {{ ar.governance.flags | join(', ') }}{% endif %}
+          </p>
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+
   {% if entry.override %}
     <div class="card mb-3">
       <div class="card-body">
-        <h5 class="card-title">Override</h5>
-        <p class="card-text"><strong>{{ entry.override.action }}</strong> — {{ entry.override.comment }}</p>
+        <h5 class="card-title">Executive Override</h5>
+        <p class="card-text"><strong>{{ entry.override.action }}</strong> &mdash; {{ entry.override.comment }}</p>
         <p class="text-muted">By {{ entry.override.by }}</p>
       </div>
     </div>
   {% endif %}
 
-  <h5>Gate Decision</h5>
+  <h5>Record Gate Decision</h5>
   <form method="post" action="{{ url_for('entry_override', idea_id=entry.idea_id) }}">
     <div class="mb-3">
       <label class="form-label">Your name</label>

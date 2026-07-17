@@ -18,6 +18,9 @@ dependencies = [
 [project.scripts]
 agentic-ai-funnel-audit = "agentic_ai_funnel_audit.cli:main"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-q"

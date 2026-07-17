@@ -10,6 +10,7 @@ class AuditEntry:
     payload: dict[str, Any]
     created_at: str
     override: dict[str, Any] | None = None
+    audit_result: dict[str, Any] | None = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def to_summary(self) -> dict[str, Any]:
@@ -24,11 +25,12 @@ class AuditStore:
     def __init__(self):
         self._entries: dict[str, AuditEntry] = {}
 
-    def save(self, idea_id: str, payload: dict[str, Any]) -> AuditEntry:
+    def save(self, idea_id: str, payload: dict[str, Any], audit_result: dict[str, Any] | None = None) -> AuditEntry:
         entry = AuditEntry(
             idea_id=idea_id,
             payload=payload,
             created_at=datetime.now(timezone.utc).isoformat(),
+            audit_result=audit_result,
         )
         self._entries[idea_id] = entry
         return entry

@@ -5,21 +5,39 @@ from typing import Any, Dict
 class ModelEvaluator:
     def __init__(self):
         self.use_model = os.getenv("AGENTIC_USE_MODEL", "false").lower() in ("1", "true", "yes")
-        self.model_name = os.getenv("AGENTIC_MODEL_NAME", "gpt-4o-mini")
-        self.openai = None
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        self.client = None
 
-        if self.api_key:
+        # --- Groq (free tier) ---
+        groq_key = os.getenv("GROQ_API_KEY")
+        if groq_key:
             try:
                 import openai
-
-                self.openai = openai
-                self.openai.api_key = self.api_key
+                self.client = openai.OpenAI(
+                    api_key=groq_key,
+                    base_url="https://api.groq.com/openai/v1",
+                )
+                self.model_name = os.getenv("AGENTIC_MODEL_NAME", "llama-3.3-70b-versatile")
+                self.use_model = True
             except Exception:
-                self.openai = None
+                self.client = None
+
+        # --- OpenAI fallback ---
+        if self.client is None:
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if openai_key:
+                try:
+                    import openai
+                    self.client = openai.OpenAI(api_key=openai_key)
+                    self.model_name = os.getenv("AGENTIC_MODEL_NAME", "gpt-4o-mini")
+                    self.use_model = True
+                except Exception:
+                    self.client = None
+
+        if self.client is None:
+            self.model_name = os.getenv("AGENTIC_MODEL_NAME", "llama-3.3-70b-versatile")
 
     def is_enabled(self) -> bool:
-        return self.use_model and self.openai is not None
+        return self.use_model and self.client is not None
 
     def evaluate(self, idea: Dict[str, Any], context: Dict[str, Any], lens: str) -> Dict[str, Any]:
         if self.is_enabled():
@@ -39,7 +57,7 @@ class ModelEvaluator:
     def _call_model(self, idea: Dict[str, Any], context: Dict[str, Any], lens: str) -> Dict[str, Any]:
         prompt = self._prompt_text(idea, context, lens)
         try:
-            response = self.openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[{"role": "system", "content": "You are an enterprise audit scoring assistant."}, {"role": "user", "content": prompt}],
                 temperature=0.7,

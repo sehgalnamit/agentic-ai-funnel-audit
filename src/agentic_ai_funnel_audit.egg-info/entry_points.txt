@@ -1,0 +1,2 @@
+[console_scripts]
+agentic-ai-funnel-audit = agentic_ai_funnel_audit.cli:main

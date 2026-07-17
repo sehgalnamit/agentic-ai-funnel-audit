@@ -12,10 +12,12 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from agentic_ai_funnel_audit.storage import AuditStore
+from agentic_ai_funnel_audit.pipeline import AuditPipeline
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
 store = AuditStore()
+pipeline = AuditPipeline()
 
 
 @app.route("/")
@@ -34,9 +36,44 @@ def intake():
             "estimated_benefit": request.form.get("estimated_benefit"),
             "risk_level": request.form.get("risk_level"),
         }
-        entry = store.save(idea_id, payload)
+        # Build an idea dict the pipeline understands
+        idea = {
+            "id": idea_id,
+            "description": payload["description"] or payload["title"],
+            "dependencies": [],
+            "workflow_overlap": 0,
+            "trend_score": 3,
+            "market_risk": 2,
+            "strategic_fit": 3,
+        }
+        context = {}
+        try:
+            result = pipeline.run(idea, context)
+            audit_result = {
+                "final_score": result.final_score,
+                "pass_gate": result.pass_gate,
+                "iso_scores": result.iso_scores,
+                "evaluations": [
+                    {"name": e.name, "score": e.score, "rationale": e.rationale}
+                    for e in result.evaluations
+                ],
+                "deliberation": {
+                    "name": result.deliberation.name,
+                    "score": result.deliberation.score,
+                    "rationale": result.deliberation.rationale,
+                },
+                "safety": {
+                    "name": result.safety.name,
+                    "score": result.safety.score,
+                    "rationale": result.safety.rationale,
+                },
+                "governance": result.governance,
+            }
+        except Exception as exc:
+            audit_result = {"error": str(exc)}
+        entry = store.save(idea_id, payload, audit_result=audit_result)
         flash(f"Saved intake: {entry.idea_id}")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("entry_detail", idea_id=entry.idea_id))
     return render_template("intake.html")
 
 
