@@ -25,7 +25,7 @@ class InternalOperationsAgent(Agent):
 
     def evaluate(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AgentEvaluation:
         dependencies = idea.get("dependencies", [])
-        data_maturity = context.get("data_maturity", 0)
+        data_maturity = context.get("data_maturity", 3)
         workflow_overlap = idea.get("workflow_overlap", 0)
         service_telemetry = context.get("service_telemetry") or {}
         incident_history = context.get("incident_history") or {}
@@ -33,6 +33,8 @@ class InternalOperationsAgent(Agent):
         architecture_metadata = context.get("architecture_metadata") or {}
 
         risk_penalty = 0
+        risk_penalty += min(3, len(dependencies))
+        risk_penalty += min(2, workflow_overlap)
         if service_telemetry.get("slo_breach_count", 0) > 0:
             risk_penalty += 1
         if service_telemetry.get("uptime", 100) < 99.0:
@@ -44,7 +46,8 @@ class InternalOperationsAgent(Agent):
         if architecture_metadata.get("legacy_systems", 0) > 2:
             risk_penalty += 1
 
-        risk_score = min(5, max(1, 5 - data_maturity + len(dependencies) + workflow_overlap - risk_penalty))
+        # Higher score means better operational readiness, lower score means higher risk.
+        readiness_score = min(5, max(1, data_maturity + 2 - risk_penalty))
 
         rationale = (
             f"Dependencies: {len(dependencies)}, "
@@ -54,7 +57,7 @@ class InternalOperationsAgent(Agent):
 
         return AgentEvaluation(
             name=self.name,
-            score=risk_score,
+            score=readiness_score,
             rationale=rationale,
             details={
                 "dependencies": dependencies,
@@ -77,7 +80,9 @@ class MarketSignalAgent(Agent):
         competitor_signal = context.get("competitor_signal", 3)
         market_risk = idea.get("market_risk", 2)
 
-        score = min(5, max(1, trend_score + competitor_signal - market_risk))
+        # Convert market risk into a positive readiness contribution.
+        market_readiness = round((trend_score + competitor_signal + (5 - market_risk)) / 3)
+        score = min(5, max(1, market_readiness))
         rationale = (
             f"Trend score: {trend_score}, "
             f"Competitor signal: {competitor_signal}, "

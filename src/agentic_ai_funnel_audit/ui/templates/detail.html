@@ -6,7 +6,8 @@
   <dl class="row">
     <dt class="col-sm-3">Owner</dt><dd class="col-sm-9">{{ entry.payload.owner }}</dd>
     <dt class="col-sm-3">Estimated Benefit</dt><dd class="col-sm-9">{{ entry.payload.estimated_benefit }}</dd>
-    <dt class="col-sm-3">Risk Level</dt><dd class="col-sm-9">{{ entry.payload.risk_level }}</dd>
+    <dt class="col-sm-3">Data Maturity</dt><dd class="col-sm-9">{{ entry.payload.data_maturity }}/5</dd>
+    <dt class="col-sm-3">Dependencies</dt><dd class="col-sm-9">{{ entry.payload.dependencies_count }}</dd>
     <dt class="col-sm-3">Created</dt><dd class="col-sm-9">{{ entry.created_at }}</dd>
   </dl>
 
@@ -71,6 +72,9 @@
           <p class="text-muted small">
             Governance: {{ 'Safe ✅' if ar.governance.is_safe else 'Flagged ⚠️' }}
             {% if ar.governance.flags %} &mdash; Flags: {{ ar.governance.flags | join(', ') }}{% endif %}
+          </p>
+          <p class="text-muted small mb-0">
+            Execution: {{ ar.execution_mode }} | Model: {{ ar.model_name if ar.model_enabled else 'Heuristic fallback (model disabled)' }}
           </p>
         </div>
       </div>

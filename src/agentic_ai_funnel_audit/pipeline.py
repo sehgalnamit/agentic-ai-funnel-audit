@@ -123,13 +123,16 @@ class AuditPipeline:
         operational_weight = weights.get("operational", 0.35)
         market_weight = weights.get("market", 0.25)
         governance_weight = weights.get("governance", 0.4)
+        deliberative_weight = 0.1
 
-        return (
+        weighted_sum = (
             internal.score * operational_weight
             + market.score * market_weight
             + safety.score * governance_weight
-            + deliberative.score * 0.1
+            + deliberative.score * deliberative_weight
         )
+        total_weight = operational_weight + market_weight + governance_weight + deliberative_weight
+        return weighted_sum / total_weight
 
     def _compute_feedback_adjustment(self, idea: Dict[str, Any], context: Dict[str, Any]) -> int:
         history = context.get("feedback_history") or []

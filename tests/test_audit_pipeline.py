@@ -54,6 +54,33 @@ def test_audit_pipeline_fails_gate_on_low_strategic_alignment():
     assert result.pass_gate is False
 
 
+def test_audit_pipeline_fails_gate_for_high_risk_idea():
+    pipeline = AuditPipeline()
+
+    idea = {
+        "id": "idea-004",
+        "description": "Legacy transformation with confidential internal use only data and unclear ownership.",
+        "dependencies": ["legacy-db", "erp", "crm", "billing"],
+        "workflow_overlap": 3,
+        "trend_score": 1,
+        "market_risk": 5,
+        "strategic_fit": 2,
+    }
+    context = {
+        "data_maturity": 1,
+        "competitor_signal": 1,
+        "service_telemetry": {"uptime": 98.2, "slo_breach_count": 3},
+        "incident_history": {"severity": 4},
+        "backlog_health": {"delivery_velocity": 1},
+        "architecture_metadata": {"legacy_systems": 5},
+    }
+
+    result = pipeline.run(idea, context)
+
+    assert result.pass_gate is False
+    assert result.final_score <= 2
+
+
 def test_audit_pipeline_uses_feedback_history_and_policy_weights():
     pipeline = AuditPipeline()
 
