@@ -6,17 +6,15 @@ class ModelEvaluator:
     def __init__(self):
         self.use_model = os.getenv("AGENTIC_USE_MODEL", "false").lower() in ("1", "true", "yes")
         self.client = None
+        self.model_name = os.getenv("AGENTIC_MODEL_NAME", "llama-3.3-70b-versatile")
 
         # --- Groq (free tier) ---
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
             try:
-                import openai
-                self.client = openai.OpenAI(
-                    api_key=groq_key,
-                    base_url="https://api.groq.com/openai/v1",
-                )
-                self.model_name = os.getenv("AGENTIC_MODEL_NAME", "llama-3.3-70b-versatile")
+                from groq import Groq
+
+                self.client = Groq(api_key=groq_key)
                 self.use_model = True
             except Exception:
                 self.client = None
@@ -26,8 +24,9 @@ class ModelEvaluator:
             openai_key = os.getenv("OPENAI_API_KEY")
             if openai_key:
                 try:
-                    import openai
-                    self.client = openai.OpenAI(api_key=openai_key)
+                    from openai import OpenAI
+
+                    self.client = OpenAI(api_key=openai_key)
                     self.model_name = os.getenv("AGENTIC_MODEL_NAME", "gpt-4o-mini")
                     self.use_model = True
                 except Exception:

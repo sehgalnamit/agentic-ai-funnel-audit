@@ -9,7 +9,8 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "pydantic",
-  "flask"
+  "flask",
+  "groq"
 ]
 
 [project.urls]

@@ -174,6 +174,56 @@ If you want model-driven scoring, set environment variables before running the s
 - `AGENTIC_USE_MODEL=true` - enable the optional scoring model
 - `AGENTIC_MODEL_NAME` - optional model name, defaults to `gpt-4o-mini`
 
+### Free Groq key for demo use
+
+If you want a no-cost demo model, use Groq's free tier:
+
+1. Go to [console.groq.com](https://console.groq.com)
+2. Sign in or create an account
+3. Open the API keys page in the console
+4. Create a new key and copy it once
+5. Set it in PowerShell before starting the app:
+
+```powershell
+$env:GROQ_API_KEY = "your-groq-key"
+python -m agentic_ai_funnel_audit.ui.app
+```
+
+Suggested demo models:
+- `llama-3.3-70b-versatile`
+- `llama-3.1-8b-instant`
+
+You do not need `OPENAI_API_KEY` for the demo if `GROQ_API_KEY` is set.
+
+### Demo scenarios you can use
+
+Use these as sample intakes in the Flask UI to show different gate outcomes and agent reasoning:
+
+1. **UDP rollout from three source systems**
+  - Title: `Review my idea to setup UDP`
+  - Description: `I want to create UDP with 3 source data currently used which are customer care, operations, Agency`
+  - Why it works: shows a clear business idea with multiple source systems and an operational dependency story.
+
+2. **Customer retention prediction pilot**
+  - Title: `Predict churn for premium customers`
+  - Description: `Use customer service, billing, and campaign data to identify churn risk and propose targeted retention actions.`
+  - Why it works: usually triggers strong strategic alignment and market value discussion.
+
+3. **Operations incident summarizer**
+  - Title: `Summarize weekly incident themes`
+  - Description: `Create a summary layer that clusters incidents by root cause, service, and impacted teams for leadership review.`
+  - Why it works: highlights operational risk, governance value, and low implementation complexity.
+
+4. **Sales enablement copilot**
+  - Title: `AI copilot for sales reps`
+  - Description: `Generate account briefs, next-best actions, and proposal drafts using CRM and product knowledge sources.`
+  - Why it works: good for demonstrating multi-agent scoring across value, feasibility, and risk.
+
+5. **Legacy workflow automation**
+  - Title: `Automate legacy approvals`
+  - Description: `Reduce manual approval steps across legacy systems, with audit logging and role-based controls.`
+  - Why it works: often surfaces constraint fit and technical feasibility tradeoffs.
+
 ## Manager UI (Intake + Gate)
 
 A small Flask-based manager UI is included for intake and gate decisions. It uses the in-memory `AuditStore`.
