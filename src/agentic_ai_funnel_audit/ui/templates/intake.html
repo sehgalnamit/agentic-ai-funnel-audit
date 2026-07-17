@@ -1,31 +1,36 @@
 {% extends 'base.html' %}
 {% block content %}
   <h1>Ideal Intake</h1>
-  <form method="post">
+  <div class="d-flex gap-2 mb-3">
+    <button type="button" class="btn btn-outline-success" id="loadPassCase">Load PASS test case</button>
+    <button type="button" class="btn btn-outline-danger" id="loadFailCase">Load FAIL test case</button>
+  </div>
+
+  <form method="post" id="intakeForm">
     <div class="mb-3">
       <label class="form-label">Idea ID (optional)</label>
-      <input name="idea_id" class="form-control" placeholder="Leave empty to generate">
+      <input name="idea_id" id="idea_id" class="form-control" placeholder="Leave empty to generate">
     </div>
     <div class="mb-3">
       <label class="form-label">Title</label>
-      <input name="title" class="form-control" required>
+      <input name="title" id="title" class="form-control" required>
     </div>
     <div class="mb-3">
       <label class="form-label">Description</label>
-      <textarea name="description" class="form-control" rows="4"></textarea>
+      <textarea name="description" id="description" class="form-control" rows="4"></textarea>
     </div>
     <div class="row">
       <div class="col-md-4 mb-3">
         <label class="form-label">Owner</label>
-        <input name="owner" class="form-control">
+        <input name="owner" id="owner" class="form-control">
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Estimated Benefit</label>
-        <input name="estimated_benefit" class="form-control">
+        <input name="estimated_benefit" id="estimated_benefit" class="form-control">
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Data Maturity (1-5)</label>
-        <select name="data_maturity" class="form-select">
+        <select name="data_maturity" id="data_maturity" class="form-select">
           <option value="1">1</option>
           <option value="2">2</option>
           <option value="3" selected>3</option>
@@ -38,30 +43,30 @@
     <div class="row">
       <div class="col-md-4 mb-3">
         <label class="form-label">Dependencies Count</label>
-        <input name="dependencies_count" type="number" class="form-control" min="0" value="1">
+        <input name="dependencies_count" id="dependencies_count" type="number" class="form-control" min="0" value="1">
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Workflow Overlap (0-3)</label>
-        <input name="workflow_overlap" type="number" class="form-control" min="0" max="3" value="0">
+        <input name="workflow_overlap" id="workflow_overlap" type="number" class="form-control" min="0" max="3" value="0">
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Strategic Fit (1-5)</label>
-        <input name="strategic_fit" type="number" class="form-control" min="1" max="5" value="3">
+        <input name="strategic_fit" id="strategic_fit" type="number" class="form-control" min="1" max="5" value="3">
       </div>
     </div>
 
     <div class="row">
       <div class="col-md-4 mb-3">
         <label class="form-label">Trend Score (1-5)</label>
-        <input name="trend_score" type="number" class="form-control" min="1" max="5" value="3">
+        <input name="trend_score" id="trend_score" type="number" class="form-control" min="1" max="5" value="3">
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Competitor Signal (1-5)</label>
-        <input name="competitor_signal" type="number" class="form-control" min="1" max="5" value="3">
+        <input name="competitor_signal" id="competitor_signal" type="number" class="form-control" min="1" max="5" value="3">
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Market Risk (1-5)</label>
-        <input name="market_risk" type="number" class="form-control" min="1" max="5" value="3">
+        <input name="market_risk" id="market_risk" type="number" class="form-control" min="1" max="5" value="3">
       </div>
     </div>
 
@@ -73,4 +78,52 @@
     </div>
     <button class="btn btn-primary">Submit Intake</button>
   </form>
+
+  <script>
+    function fillCase(payload) {
+      Object.entries(payload).forEach(([key, value]) => {
+        const el = document.getElementById(key);
+        if (!el) return;
+        if (el.type === "checkbox") {
+          el.checked = Boolean(value);
+          return;
+        }
+        el.value = value;
+      });
+    }
+
+    document.getElementById("loadPassCase").addEventListener("click", () => {
+      fillCase({
+        title: "Predict churn for premium customers",
+        description: "Use customer service, billing, and campaign data to identify churn risk and propose targeted retention actions.",
+        owner: "Demo Owner",
+        estimated_benefit: "250",
+        data_maturity: 4,
+        dependencies_count: 1,
+        workflow_overlap: 0,
+        strategic_fit: 5,
+        trend_score: 4,
+        competitor_signal: 4,
+        market_risk: 2,
+        containsSensitiveConcepts: false,
+      });
+    });
+
+    document.getElementById("loadFailCase").addEventListener("click", () => {
+      fillCase({
+        title: "Legacy approvals with confidential keys",
+        description: "Automate approvals across legacy systems and include api key material in prompt for faster implementation.",
+        owner: "Demo Owner",
+        estimated_benefit: "40",
+        data_maturity: 1,
+        dependencies_count: 4,
+        workflow_overlap: 3,
+        strategic_fit: 2,
+        trend_score: 1,
+        competitor_signal: 1,
+        market_risk: 5,
+        containsSensitiveConcepts: true,
+      });
+    });
+  </script>
 {% endblock %}
