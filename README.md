@@ -8,6 +8,18 @@ A focused starter project for decision support in enterprise innovation. This re
 
 This project turns those early funnel concepts into a defensible, audit-ready scorecard.
 
+## Quick start
+
+### Run the manager UI
+
+```bash
+python -m agentic_ai_funnel_audit.ui.app
+```
+
+Then open:
+- `http://127.0.0.1:5000/intake` for the Ideal Intake form
+- `http://127.0.0.1:5000/dashboard` for the Gate Decision dashboard
+
 ## Where a CTAIO can use this
 
 This pattern is especially useful for a Chief Technology and AI Officer when the challenge is not ideation but disciplined prioritization. It helps turn early-stage innovation ideas into auditable decisions before engineering spend begins.
@@ -173,6 +185,29 @@ If you want model-driven scoring, set environment variables before running the s
 - `OPENAI_API_KEY` - your OpenAI credential
 - `AGENTIC_USE_MODEL=true` - enable the optional scoring model
 - `AGENTIC_MODEL_NAME` - optional model name, defaults to `gpt-4o-mini`
+
+## Manager UI (Intake + Gate)
+
+A small Flask-based manager UI is included for intake and gate decisions. It uses the in-memory `AuditStore`.
+
+Run the UI from the repository root:
+
+```bash
+python -m agentic_ai_funnel_audit.ui.app
+```
+
+Or, run directly from the `ui` folder:
+
+```bash
+python ui/app.py
+```
+
+Default host: `http://0.0.0.0:5000` — pages:
+- `/intake` — Ideal Intake form
+- `/dashboard` — Gate decision dashboard and entry review
+
+Notes:
+- This is a lightweight scaffold intended for MVP and internal manager use. For production deploy, containerize the app and wire `AuditStore` to persistent storage.
 
 ## Deploy on GCP
 
