@@ -3,6 +3,7 @@
   <h1>Ideal Intake</h1>
   <div class="d-flex gap-2 mb-3">
     <button type="button" class="btn btn-outline-success" id="loadPassCase">Load PASS test case</button>
+    <button type="button" class="btn btn-outline-warning" id="loadBorderlineCase">Load BORDERLINE test case</button>
     <button type="button" class="btn btn-outline-danger" id="loadFailCase">Load FAIL test case</button>
   </div>
 
@@ -105,6 +106,23 @@
         trend_score: 4,
         competitor_signal: 4,
         market_risk: 2,
+        containsSensitiveConcepts: false,
+      });
+    });
+
+    document.getElementById("loadBorderlineCase").addEventListener("click", () => {
+      fillCase({
+        title: "Automate weekly governance reporting",
+        description: "Automate governance reports from operations and customer support systems with moderate legacy integration needs.",
+        owner: "Demo Owner",
+        estimated_benefit: "120",
+        data_maturity: 3,
+        dependencies_count: 2,
+        workflow_overlap: 1,
+        strategic_fit: 3,
+        trend_score: 3,
+        competitor_signal: 3,
+        market_risk: 3,
         containsSensitiveConcepts: false,
       });
     });
