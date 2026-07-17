@@ -195,7 +195,7 @@ Suggested demo models:
 
 You do not need `OPENAI_API_KEY` for the demo if `GROQ_API_KEY` is set.
 
-### Demo scenarios you can use
+### Test Cases you can use
 
 Use these as sample intakes in the Flask UI to show different gate outcomes and agent reasoning:
 
