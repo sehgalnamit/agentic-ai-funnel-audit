@@ -29,6 +29,8 @@ def test_audit_pipeline_passes_gate_for_aligned_idea():
     assert result.idea_id == "idea-001"
     assert result.final_score >= 3
     assert result.iso_scores["Strategic Alignment"] == 4
+    assert result.iso_scores["Constraint Fit"] >= 3
+    assert result.iso_scores["Technical Feasibility"] >= 3
     assert result.pass_gate is True
 
 
@@ -51,6 +53,33 @@ def test_audit_pipeline_fails_gate_on_low_strategic_alignment():
     result = pipeline.run(idea, context)
 
     assert result.iso_scores["Strategic Alignment"] == 1
+    assert result.pass_gate is False
+
+
+def test_iso_scores_drop_for_low_operational_readiness():
+    pipeline = AuditPipeline()
+
+    idea = {
+        "id": "idea-006",
+        "dependencies": ["legacy-db", "erp", "crm", "billing"],
+        "workflow_overlap": 3,
+        "trend_score": 2,
+        "market_risk": 4,
+        "strategic_fit": 4,
+    }
+    context = {
+        "data_maturity": 1,
+        "competitor_signal": 2,
+        "service_telemetry": {"uptime": 98.0, "slo_breach_count": 2},
+        "incident_history": {"severity": 4},
+        "backlog_health": {"delivery_velocity": 1},
+        "architecture_metadata": {"legacy_systems": 5},
+    }
+
+    result = pipeline.run(idea, context)
+
+    assert result.iso_scores["Technical Feasibility"] <= 2
+    assert result.iso_scores["Constraint Fit"] <= 2
     assert result.pass_gate is False
 
 
@@ -79,6 +108,35 @@ def test_audit_pipeline_fails_gate_for_high_risk_idea():
 
     assert result.pass_gate is False
     assert result.final_score <= 2
+
+
+def test_audit_pipeline_fails_when_constraint_fit_is_below_threshold():
+    pipeline = AuditPipeline()
+
+    idea = {
+        "id": "idea-005",
+        "description": "Strategic initiative with severe delivery constraints.",
+        "dependencies": ["legacy-db", "erp", "crm", "billing"],
+        "workflow_overlap": 3,
+        "trend_score": 3,
+        "market_risk": 4,
+        "strategic_fit": 5,
+    }
+    context = {
+        "data_maturity": 1,
+        "competitor_signal": 2,
+        "service_telemetry": {"uptime": 98.0, "slo_breach_count": 2},
+        "incident_history": {"severity": 4},
+        "backlog_health": {"delivery_velocity": 1},
+        "architecture_metadata": {"legacy_systems": 5},
+    }
+
+    result = pipeline.run(idea, context)
+
+    assert result.iso_scores["Strategic Alignment"] == 5
+    assert result.iso_scores["Constraint Fit"] < 3
+    assert result.iso_scores["Technical Feasibility"] < 3
+    assert result.pass_gate is False
 
 
 def test_audit_pipeline_uses_feedback_history_and_policy_weights():

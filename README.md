@@ -127,6 +127,25 @@ flowchart LR
     Debate --> Audit[AuditResult]
 ```
 
+## Scoring semantics and gate policy
+
+All scores in this project use the same direction: **higher is better** on a 1-5 scale.
+
+- **Strategic Alignment**: direct mapping from `strategic_fit`.
+- **Constraint Fit**: average readiness from internal and market perspectives.
+- **Technical Feasibility**: direct mapping from internal operational readiness.
+- **Compliance Readiness**: direct mapping from safety score.
+
+Gate decision is intentionally stricter than an overall weighted average. An idea passes only when all of the following are true:
+- final score is at or above `approval_threshold` (default: 3)
+- Strategic Alignment >= 3
+- Constraint Fit >= 3
+- Technical Feasibility >= 3
+- Compliance Readiness >= 3
+- governance guardrail returns safe
+
+This avoids a scenario where one weak domain is hidden by strong scores in other domains.
+
 ## What this repo contains
 
 - `src/agentic_ai_funnel_audit/agents.py` — operational, market, and deliberative agent logic
@@ -199,30 +218,35 @@ You do not need `OPENAI_API_KEY` for the demo if `GROQ_API_KEY` is set.
 
 Use these as sample intakes in the Flask UI to show different gate outcomes and agent reasoning:
 
-1. **UDP rollout from three source systems**
-  - Title: `Review my idea to setup UDP`
-  - Description: `I want to create UDP with 3 source data currently used which are customer care, operations, Agency`
-  - Why it works: shows a clear business idea with multiple source systems and an operational dependency story.
+1. **Balanced readiness (expected PASS)**
+  - Title: `Real-time analytics hub`
+  - Description: `Build a real-time analytics hub for enterprise workflow signals.`
+  - Suggested values: strategic_fit=4, data_maturity=4, dependencies_count=1, workflow_overlap=0, trend_score=4, competitor_signal=4, market_risk=1
+  - Why it works: keeps all four ISO domains >= 3 and should pass the gate.
 
-2. **Customer retention prediction pilot**
-  - Title: `Predict churn for premium customers`
-  - Description: `Use customer service, billing, and campaign data to identify churn risk and propose targeted retention actions.`
-  - Why it works: usually triggers strong strategic alignment and market value discussion.
+2. **High strategic fit but low feasibility (expected FAIL)**
+  - Title: `Strategic transformation with legacy dependencies`
+  - Description: `Strategic initiative with severe delivery constraints.`
+  - Suggested values: strategic_fit=5, data_maturity=1, dependencies_count=4, workflow_overlap=3, trend_score=3, competitor_signal=2, market_risk=4
+  - Why it works: demonstrates that strong strategic alignment cannot override low constraint fit and technical feasibility.
 
-3. **Operations incident summarizer**
-  - Title: `Summarize weekly incident themes`
-  - Description: `Create a summary layer that clusters incidents by root cause, service, and impacted teams for leadership review.`
-  - Why it works: highlights operational risk, governance value, and low implementation complexity.
+3. **Low strategic fit (expected FAIL)**
+  - Title: `Experimental capability with weak alignment`
+  - Description: `Pilot a capability that does not map clearly to current business priorities.`
+  - Suggested values: strategic_fit=1, data_maturity=3, dependencies_count=1, workflow_overlap=0, trend_score=3, competitor_signal=3, market_risk=2
+  - Why it works: fails due to Strategic Alignment threshold.
 
-4. **Sales enablement copilot**
-  - Title: `AI copilot for sales reps`
-  - Description: `Generate account briefs, next-best actions, and proposal drafts using CRM and product knowledge sources.`
-  - Why it works: good for demonstrating multi-agent scoring across value, feasibility, and risk.
+4. **Sensitive content safety failure (expected FAIL)**
+  - Title: `Automation over confidential material`
+  - Description: `Use password and api key values from confidential logs to speed up troubleshooting.`
+  - Suggested values: strategic_fit=4, data_maturity=4, dependencies_count=1, workflow_overlap=0, trend_score=4, competitor_signal=3, market_risk=2
+  - Why it works: safety/compliance and governance guardrails should block approval.
 
-5. **Legacy workflow automation**
-  - Title: `Automate legacy approvals`
-  - Description: `Reduce manual approval steps across legacy systems, with audit logging and role-based controls.`
-  - Why it works: often surfaces constraint fit and technical feasibility tradeoffs.
+5. **Moderate value, moderate risk (borderline by policy)**
+  - Title: `Incident trend summarizer`
+  - Description: `Summarize weekly incident themes for engineering leadership.`
+  - Suggested values: strategic_fit=3, data_maturity=3, dependencies_count=2, workflow_overlap=1, trend_score=3, competitor_signal=3, market_risk=2
+  - Why it works: useful to demonstrate policy threshold tuning via `approval_threshold` and weighting.
 
 ## Manager UI (Intake + Gate)
 

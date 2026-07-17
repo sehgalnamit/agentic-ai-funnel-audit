@@ -61,7 +61,9 @@ class AuditPipeline:
         pass_gate = (
             final_score >= policy.get("approval_threshold", 3)
             and iso_scores["Strategic Alignment"] >= 3
-            and safety.score >= 3
+            and iso_scores["Constraint Fit"] >= 3
+            and iso_scores["Technical Feasibility"] >= 3
+            and iso_scores["Compliance Readiness"] >= 3
             and governance["is_safe"]
         )
         report = self._build_report(idea, context, iso_scores, final_score, pass_gate, governance, safety, model_insights)
@@ -90,8 +92,8 @@ class AuditPipeline:
         safety: AgentEvaluation,
     ) -> Dict[str, int]:
         strategic_alignment = min(5, max(1, idea.get("strategic_fit", 3)))
-        constraint_fit = min(5, max(1, 6 - max(internal.score, market.score)))
-        technical_feasibility = min(5, max(1, 6 - internal.score))
+        constraint_fit = min(5, max(1, round((internal.score + market.score) / 2)))
+        technical_feasibility = min(5, max(1, internal.score))
         compliance_readiness = min(5, max(1, safety.score))
 
         return {
