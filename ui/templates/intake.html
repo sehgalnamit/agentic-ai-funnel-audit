@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Ideal Intake</h1>
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label">Idea ID (optional)</label>
+      <input name="idea_id" class="form-control" placeholder="Leave empty to generate">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Title</label>
+      <input name="title" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Description</label>
+      <textarea name="description" class="form-control" rows="4"></textarea>
+    </div>
+    <div class="row">
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Owner</label>
+        <input name="owner" class="form-control">
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Estimated Benefit</label>
+        <input name="estimated_benefit" class="form-control">
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Risk Level</label>
+        <select name="risk_level" class="form-select">
+          <option>Low</option>
+          <option>Medium</option>
+          <option>High</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary">Submit Intake</button>
+  </form>
+{% endblock %}

@@ -8,18 +8,6 @@ A focused starter project for decision support in enterprise innovation. This re
 
 This project turns those early funnel concepts into a defensible, audit-ready scorecard.
 
-## Quick start
-
-### Run the manager UI
-
-```bash
-python -m agentic_ai_funnel_audit.ui.app
-```
-
-Then open:
-- `http://127.0.0.1:5000/intake` for the Ideal Intake form
-- `http://127.0.0.1:5000/dashboard` for the Gate Decision dashboard
-
 ## Where a CTAIO can use this
 
 This pattern is especially useful for a Chief Technology and AI Officer when the challenge is not ideation but disciplined prioritization. It helps turn early-stage innovation ideas into auditable decisions before engineering spend begins.
@@ -208,6 +196,7 @@ Default host: `http://0.0.0.0:5000` — pages:
 
 Notes:
 - This is a lightweight scaffold intended for MVP and internal manager use. For production deploy, containerize the app and wire `AuditStore` to persistent storage.
+
 
 ## Deploy on GCP
 

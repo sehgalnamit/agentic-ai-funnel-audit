@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Gate Decision Dashboard</h1>
+  {% if entries %}
+    <div class="list-group">
+      {% for e in entries %}
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="{{ url_for('entry_detail', idea_id=e.idea_id) }}">
+          <div>
+            <strong>{{ e.payload.title or e.idea_id }}</strong>
+            <div class="small text-muted">Owner: {{ e.payload.owner or '—' }} • {{ e.created_at }}</div>
+          </div>
+          <div>
+            {% if e.override %}
+              <span class="badge bg-secondary">Overridden: {{ e.override.action }}</span>
+            {% endif %}
+            <span class="badge bg-info">View</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted">No entries yet. Create one from the Ideal Intake.</p>
+  {% endif %}
+{% endblock %}

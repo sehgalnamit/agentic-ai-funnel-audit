@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Entry {{ entry.idea_id }}</h1>
+  <h4>{{ entry.payload.title }}</h4>
+  <p>{{ entry.payload.description }}</p>
+  <dl class="row">
+    <dt class="col-sm-3">Owner</dt><dd class="col-sm-9">{{ entry.payload.owner }}</dd>
+    <dt class="col-sm-3">Estimated Benefit</dt><dd class="col-sm-9">{{ entry.payload.estimated_benefit }}</dd>
+    <dt class="col-sm-3">Risk Level</dt><dd class="col-sm-9">{{ entry.payload.risk_level }}</dd>
+    <dt class="col-sm-3">Created</dt><dd class="col-sm-9">{{ entry.created_at }}</dd>
+  </dl>
+
+  {% if entry.override %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Override</h5>
+        <p class="card-text"><strong>{{ entry.override.action }}</strong> — {{ entry.override.comment }}</p>
+        <p class="text-muted">By {{ entry.override.by }}</p>
+      </div>
+    </div>
+  {% endif %}
+
+  <h5>Gate Decision</h5>
+  <form method="post" action="{{ url_for('entry_override', idea_id=entry.idea_id) }}">
+    <div class="mb-3">
+      <label class="form-label">Your name</label>
+      <input name="user" class="form-control">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Comment</label>
+      <textarea name="comment" class="form-control" rows="3"></textarea>
+    </div>
+    <button name="action" value="approve" class="btn btn-success">Approve</button>
+    <button name="action" value="reject" class="btn btn-danger">Reject</button>
+    <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">Back</a>
+  </form>
+
+{% endblock %}
