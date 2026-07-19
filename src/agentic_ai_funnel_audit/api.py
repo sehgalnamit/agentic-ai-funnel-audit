@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .pipeline import AuditPipeline
 from .storage import AuditStore
 from .connectors import OperationalDataFetcher
+from .knowledge_base import load_demo_knowledge_base
 from .outcomes import OutcomeStore, OutcomeRecord, FeedbackLoopCalibrator
 
 app = FastAPI(title="Agentic AI Funnel Audit")
@@ -16,6 +17,7 @@ audit_store = AuditStore()
 data_fetcher = OperationalDataFetcher()
 outcome_store = OutcomeStore()
 calibrator = FeedbackLoopCalibrator(outcome_store)
+knowledge_base = load_demo_knowledge_base()
 
 
 class IdeaRequest(BaseModel):
@@ -57,6 +59,11 @@ class AuditPayload(BaseModel):
     team_id: str | None = Field(default=None)
 
 
+class BatchAuditPayload(BaseModel):
+    ideas: list[IdeaRequest]
+    context: IdeaContext | None = Field(default=None)
+
+
 class OutcomeRequest(BaseModel):
     idea_id: str
     outcome_status: str
@@ -79,7 +86,9 @@ def health():
 def audit_idea(payload: AuditPayload):
     idea = payload.idea.model_dump()
     context_data = payload.context.model_dump() if payload.context else {}
-    result = pipeline.run(idea, context_data)
+    runtime_context = dict(context_data)
+    runtime_context["knowledge_base"] = knowledge_base
+    result = pipeline.run(idea, runtime_context)
     audit_store.save(idea_id=result.idea_id, payload={
         "idea": idea,
         "context": context_data,
@@ -110,6 +119,55 @@ def audit_idea(payload: AuditPayload):
             "score": result.deliberation.score,
             "rationale": result.deliberation.rationale,
         },
+    }
+
+
+@app.post("/audit/batch")
+def audit_batch(payload: BatchAuditPayload):
+    shared_context = payload.context.model_dump() if payload.context else {}
+    shared_context["knowledge_base"] = knowledge_base
+    ideas = [idea.model_dump() for idea in payload.ideas]
+    results = pipeline.run_batch(ideas, shared_context)
+
+    output = []
+    for result, idea in zip(results, ideas):
+        audit_store.save(idea_id=result.idea_id, payload={
+            "idea": idea,
+            "context": {key: value for key, value in shared_context.items() if key != "knowledge_base"},
+            "result": {
+                "final_score": result.final_score,
+                "pass_gate": result.pass_gate,
+                "iso_scores": result.iso_scores,
+                "governance": result.governance,
+                "policy": result.policy,
+                "feedback_adjustment": result.feedback_adjustment,
+                "report": result.report,
+                "artifact": result.artifact,
+            },
+        })
+        output.append({
+            "idea_id": result.idea_id,
+            "final_score": result.final_score,
+            "pass_gate": result.pass_gate,
+            "iso_scores": result.iso_scores,
+            "report": result.report,
+        })
+
+    return {
+        "count": len(output),
+        "results": output,
+    }
+
+
+@app.get("/knowledge-base/status")
+def get_knowledge_base_status():
+    return {
+        "domains": [status.to_dict() for status in knowledge_base.domain_statuses()],
+        "mode": "demo_kb_for_local_working_demo",
+        "production_note": (
+            "In production, each domain should be refreshed asynchronously from authoritative company systems, "
+            "not edited manually in app storage."
+        ),
     }
 
 

@@ -120,6 +120,15 @@ class AuditPipeline:
             artifact=artifact,
         )
 
+    def run_batch(self, ideas: List[Dict[str, Any]], shared_context: Dict[str, Any] | None = None) -> List[AuditResult]:
+        base_context = shared_context or {}
+        results: List[AuditResult] = []
+        for idea in ideas:
+            context = dict(base_context)
+            context.update(idea.get("context_overrides") or {})
+            results.append(self.run(idea, context))
+        return results
+
     def _score_iso_domains(
         self,
         strategic: AgentEvaluation,

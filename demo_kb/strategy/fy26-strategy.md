@@ -3,6 +3,9 @@ title: FY26 Enterprise Strategy Priorities
 priority_score: 5
 themes: customer retention, workflow automation, governed ai, platform reuse, enterprise analytics
 owner: strategy-office
+refresh_mode: async
+refresh_cadence: monthly
+source_system: strategy office documents and OKRs
 ---
 # FY26 Enterprise Strategy Priorities
 

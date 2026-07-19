@@ -3,6 +3,9 @@ title: Customer and Operations Data Maturity Baseline
 maturity_score: 2
 covered_sources: crm, billing, support, product telemetry
 owner: data-governance
+refresh_mode: async
+refresh_cadence: weekly
+source_system: data catalog and stewardship reviews
 ---
 # Customer and Operations Data Maturity Baseline
 

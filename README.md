@@ -127,12 +127,141 @@ flowchart LR
     Debate --> Audit[AuditResult]
 ```
 
+  ## Production architecture direction
+
+  The local working demo now uses `demo_kb/` as a stand-in for what should become **domain-owned, asynchronously refreshed RAG memory** in production. The design target is not a synchronous loop that asks a user to self-score an idea. The design target is a production system where each subagent reads authoritative enterprise evidence and infers readiness, blockers, and investment path.
+
+  ### Part 1: The Multi-Agent Orchestration Mesh
+
+  Foundational agent patterns such as supervisor-worker routing and sequential ReAct loops are useful for prototypes, but they become fragile under enterprise throughput. A slow model response or tool timeout can block the whole chain. The production direction for this app is an **asynchronous actor mesh** over an event backbone.
+
+  ```mermaid
+  flowchart TD
+    A[Inbound idea request] --> B[Task Router Actor]
+    B --> C[Strategic Domain Actor]
+    B --> D[Data Domain Actor]
+    B --> E[Technology Domain Actor]
+    B --> F[Market Domain Actor]
+    B --> G[Governance Domain Actor]
+    C --> H[Decision Aggregator]
+    D --> H
+    E --> H
+    F --> H
+    G --> H
+    H --> I[Scorecard, route, and human escalation]
+  ```
+
+  Production pattern:
+  - The router should publish work to domain queues instead of invoking all workers in one blocking thread.
+  - Each subagent should run as an isolated actor with its own state, retry policy, and queue depth.
+  - Loop guards should stop non-deterministic correction cycles and escalate to a human reviewer.
+  - The platform should support both a single idea and a batch of ideas. The API now exposes `POST /audit` and `POST /audit/batch` to reflect both modes.
+
+  ### Part 2: The Enterprise Memory Fabric
+
+  Standard vector-only RAG is not enough for enterprise decision systems. The platform should use a **multi-tier hybrid memory stack** so that semantic recall and explicit business structure are both preserved.
+
+  ```mermaid
+  flowchart TD
+    A[Idea facts] --> B[Agent query builder]
+    B --> C[Transient layer: Redis or cache]
+    B --> D[Semantic layer: Vector database]
+    B --> E[Relational layer: Graph database]
+    C --> F[Context pruning and weighting]
+    D --> F
+    E --> F
+    F --> G[Grounded agent reasoning]
+  ```
+
+  Recommended memory stack:
+  - `Transient layer`: active session state, locks, queue claims, and warm handover payloads.
+  - `Semantic layer`: embeddings for policies, strategy documents, operational notes, market research, and historical decisions.
+  - `Relational layer`: organizational hierarchy, system dependencies, data lineage, capability maps, and ownership graphs.
+
+  Priority calculation for context pruning:
+
+  $$
+  	ext{Priority} = (\text{Semantic Relevance} \times 0.5) + (\text{Recency Decay} \times 0.3) + (\text{Graph Entity Proximity} \times 0.2)
+  $$
+
+  In the working demo, `demo_kb/` holds markdown files for each domain. In production, those domains should be populated asynchronously from company-owned systems:
+  - strategy agent: strategy office documents, OKRs, portfolio priorities
+  - data readiness agent: data catalog, lineage, stewardship reviews, quality dashboards
+  - technology readiness agent: CMDB, telemetry, service availability, platform constraints, delivery capacity
+  - market agent: external analyst feeds, news, earnings calls, CRM notes, win-loss reviews, support signals
+  - governance agent: policy repository, data classification rules, AI risk controls, audit findings
+
+  Each domain RAG must be maintained asynchronously by the responsible team, not by end users entering scores in the app.
+
+  ### Part 3: Tool Federation and Day-2 Operations
+
+  In production, subagents should never hold direct credentials to internal systems. Tool use must be wrapped in a zero-trust execution layer.
+
+  ```mermaid
+  flowchart LR
+    A[AI Agent] --> B[MCP Server]
+    B --> C[Enterprise Gateway]
+    C --> D[Operational systems]
+    C --> E[Provisioning and data services]
+  ```
+
+  Production pattern:
+  - use federated MCP tool access behind a secure proxy
+  - validate every tool payload against deterministic schemas before it leaves the agent boundary
+  - route tool execution through an API gateway with OAuth 2.0 and RBAC
+  - trigger warm human handover when confidence drops or retry thresholds are crossed
+  - use OpenTelemetry for multi-hop tracing across routing, retrieval, model, and tool execution
+
+  ## KB-backed agent design
+
+  The current app now moves toward this model:
+  - users submit idea facts, not self-scores
+  - strategic, data, technology, market, and governance agents retrieve evidence from the knowledge base
+  - the pipeline returns score, evidence, and an investment route
+  - a strong idea with weak readiness can be recommended as `fund_foundation_first` instead of being rejected outright
+
+  ## How external trends should be checked
+
+  The market agent should combine both macro and micro signals.
+
+  Macro factors:
+  - cost pressure
+  - productivity mandates
+  - regulatory direction
+  - AI governance expectations
+  - sector-wide investment shifts
+
+  Micro factors:
+  - competitor launches
+  - win-loss commentary
+  - CRM notes
+  - support pain signals
+  - product telemetry shifts
+  - workflow bottlenecks in a target business unit
+
+  Recommended production flow:
+  1. ingest external trend summaries from analyst research, trusted news, earnings calls, and market reports into the market RAG asynchronously
+  2. ingest internal demand signals from CRM, support, product, and sales systems into the same domain RAG with metadata tags
+  3. tag each record with `industry`, `time_horizon`, `macro_factors`, `micro_factors`, and `business_capability`
+  4. require the market agent to cite both macro and micro evidence before assigning a strong score
+
+  ## Domain ownership and asynchronous KB maintenance
+
+  The demo KB files now include ownership and refresh metadata to make the production direction explicit. You can inspect this in the UI and through `GET /knowledge-base/status`.
+
+  Expected production ownership model:
+  - strategy office maintains strategy RAG asynchronously on a monthly or quarterly cadence
+  - data team maintains maturity, quality, and lineage RAG asynchronously on a weekly cadence
+  - platform and architecture teams maintain infrastructure and service readiness RAG asynchronously on a daily cadence
+  - market intelligence and commercial teams maintain trend RAG asynchronously from external and internal feeds
+  - risk and governance teams maintain policy and control RAG asynchronously from official repositories
+
 ## Scoring semantics and gate policy
 
 All scores in this project use the same direction: **higher is better** on a 1-5 scale.
 
-- **Strategic Alignment**: direct mapping from `strategic_fit`.
-- **Constraint Fit**: average readiness from internal and market perspectives.
+  - **Strategic Alignment**: derived from strategy evidence, with optional explicit override for testing.
+  - **Constraint Fit**: average readiness from data, internal operations, and market perspectives.
 - **Technical Feasibility**: direct mapping from internal operational readiness.
 - **Compliance Readiness**: direct mapping from safety score.
 
@@ -177,11 +306,13 @@ uvicorn agentic_ai_funnel_audit.api:app --host 0.0.0.0 --port 8000
 Available endpoints:
 - `GET /` - health check
 - `POST /audit` - submit an idea + context for audit scoring
+- `POST /audit/batch` - submit a batch of ideas for audit scoring
 - `GET /audits` - list saved audit entries
 - `GET /audit/{idea_id}` - retrieve a saved audit entry
 - `GET /audit/{idea_id}/artifact` - download the formal audit artifact
 - `GET /audit/{idea_id}/enrich` - fetch enriched context from operational data sources (requires `service_id` and `team_id` query params)
 - `POST /audit/{idea_id}/override` - apply an executive override to a saved audit
+- `GET /knowledge-base/status` - inspect domain ownership and refresh metadata for KB-backed agents
 - `GET /dashboard` - HTML dashboard with audit history
 - `POST /outcomes` - record an outcome for a completed idea
 - `GET /outcomes` - list all recorded outcomes
@@ -214,39 +345,12 @@ Suggested demo models:
 
 You do not need `OPENAI_API_KEY` for the demo if `GROQ_API_KEY` is set.
 
-### Test Cases you can use
+### Demo cases you can use
 
-Use these as sample intakes in the Flask UI to show different gate outcomes and agent reasoning:
-
-1. **Balanced readiness (expected PASS)**
-  - Title: `Real-time analytics hub`
-  - Description: `Build a real-time analytics hub for enterprise workflow signals.`
-  - Suggested values: strategic_fit=4, data_maturity=4, dependencies_count=1, workflow_overlap=0, trend_score=4, competitor_signal=4, market_risk=1
-  - Why it works: keeps all four ISO domains >= 3 and should pass the gate.
-
-2. **High strategic fit but low feasibility (expected FAIL)**
-  - Title: `Strategic transformation with legacy dependencies`
-  - Description: `Strategic initiative with severe delivery constraints.`
-  - Suggested values: strategic_fit=5, data_maturity=1, dependencies_count=4, workflow_overlap=3, trend_score=3, competitor_signal=2, market_risk=4
-  - Why it works: demonstrates that strong strategic alignment cannot override low constraint fit and technical feasibility.
-
-3. **Low strategic fit (expected FAIL)**
-  - Title: `Experimental capability with weak alignment`
-  - Description: `Pilot a capability that does not map clearly to current business priorities.`
-  - Suggested values: strategic_fit=1, data_maturity=3, dependencies_count=1, workflow_overlap=0, trend_score=3, competitor_signal=3, market_risk=2
-  - Why it works: fails due to Strategic Alignment threshold.
-
-4. **Sensitive content safety failure (expected FAIL)**
-  - Title: `Automation over confidential material`
-  - Description: `Use password and api key values from confidential logs to speed up troubleshooting.`
-  - Suggested values: strategic_fit=4, data_maturity=4, dependencies_count=1, workflow_overlap=0, trend_score=4, competitor_signal=3, market_risk=2
-  - Why it works: safety/compliance and governance guardrails should block approval.
-
-5. **Moderate value, moderate risk (borderline by policy)**
-  - Title: `Incident trend summarizer`
-  - Description: `Summarize weekly incident themes for engineering leadership.`
-  - Suggested values: strategic_fit=3, data_maturity=3, dependencies_count=2, workflow_overlap=1, trend_score=3, competitor_signal=3, market_risk=2
-  - Why it works: useful to demonstrate policy threshold tuning via `approval_threshold` and weighting.
+Use the Flask UI buttons to load three working examples:
+- a strong idea that should pass
+- a strategically strong idea that should recommend `fund_foundation_first`
+- a governance-failing idea that should be blocked
 
 ## Manager UI (Intake + Gate)
 
@@ -270,6 +374,7 @@ Default host: `http://0.0.0.0:5000` — pages:
 
 Notes:
 - This is a lightweight scaffold intended for MVP and internal manager use. For production deploy, containerize the app and wire `AuditStore` to persistent storage.
+- `demo_kb/` is a working demo. In production, replace it with asynchronously refreshed RAG stores owned by the relevant business and platform teams.
 
 
 ## Deploy on GCP
@@ -326,10 +431,10 @@ Quick steps:
 
 ## Next steps
 
-1. integrate with real data sources: Datadog for telemetry, PagerDuty for incidents, Jira for backlog, custom CMDBs for architecture metadata
-2. build frontend dashboard for reviewers and executives with audit visualization and override workflows
-3. implement custom approval workflows and notification triggers (email, Slack, Teams)
-4. add analytics and compliance reporting for audit history
+1. replace the markdown demo KB with vector, graph, and cache-backed enterprise memory services
+2. ingest strategy, data, market, and platform evidence asynchronously from authoritative company systems
+3. move routing and subagent execution to an event-driven actor mesh for higher throughput and stronger fault isolation
+4. wrap tools behind MCP and a zero-trust gateway with schema validation, RBAC, and OpenTelemetry tracing
 
 ## License
 

@@ -54,6 +54,26 @@ class KnowledgeHit:
         }
 
 
+@dataclass
+class KnowledgeDomainStatus:
+    domain: str
+    owner: str
+    refresh_mode: str
+    refresh_cadence: str
+    source_system: str
+    document_count: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "domain": self.domain,
+            "owner": self.owner,
+            "refresh_mode": self.refresh_mode,
+            "refresh_cadence": self.refresh_cadence,
+            "source_system": self.source_system,
+            "document_count": self.document_count,
+        }
+
+
 class DemoKnowledgeBase:
     def __init__(self, documents: Iterable[KnowledgeDocument]):
         self.documents = list(documents)
@@ -102,6 +122,22 @@ class DemoKnowledgeBase:
         for document in self.documents:
             grouped.setdefault(document.domain, []).append(document)
         return grouped
+
+    def domain_statuses(self) -> list[KnowledgeDomainStatus]:
+        statuses: list[KnowledgeDomainStatus] = []
+        for domain, documents in self.grouped_documents().items():
+            first = documents[0]
+            statuses.append(
+                KnowledgeDomainStatus(
+                    domain=domain,
+                    owner=str(first.metadata.get("owner", "unknown")),
+                    refresh_mode=str(first.metadata.get("refresh_mode", "async")),
+                    refresh_cadence=str(first.metadata.get("refresh_cadence", "daily")),
+                    source_system=str(first.metadata.get("source_system", "enterprise documents")),
+                    document_count=len(documents),
+                )
+            )
+        return sorted(statuses, key=lambda status: status.domain)
 
 
 _cached_demo_kb: DemoKnowledgeBase | None = None

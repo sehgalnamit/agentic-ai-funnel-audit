@@ -6,6 +6,9 @@ market_risk: 2
 macro_factors: cost pressure, productivity mandates, tighter ai governance
 micro_factors: support automation, churn analytics, workflow orchestration
 owner: market-intelligence
+refresh_mode: async
+refresh_cadence: daily
+source_system: analyst research, news feeds, crm notes, win-loss reviews
 ---
 # AI Service Operations Trend Watch
 

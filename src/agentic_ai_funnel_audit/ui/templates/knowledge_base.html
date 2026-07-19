@@ -15,6 +15,38 @@
     </div>
   </div>
 
+  <div class="card mb-4">
+    <div class="card-header"><strong>Domain ownership and refresh model</strong></div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th>Owner</th>
+              <th>Refresh mode</th>
+              <th>Cadence</th>
+              <th>Source system</th>
+              <th>Docs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for status in domain_statuses %}
+              <tr>
+                <td class="text-capitalize">{{ status.domain }}</td>
+                <td>{{ status.owner }}</td>
+                <td>{{ status.refresh_mode }}</td>
+                <td>{{ status.refresh_cadence }}</td>
+                <td>{{ status.source_system }}</td>
+                <td>{{ status.document_count }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   {% for domain, documents in grouped_documents.items() %}
     <div class="card mb-4">
       <div class="card-header text-capitalize"><strong>{{ domain }} agent KB</strong></div>

@@ -45,6 +45,46 @@ def test_audit_endpoint():
     assert response.json()["report"]["executive_summary"]
 
 
+def test_batch_audit_endpoint():
+    payload = {
+        "ideas": [
+            {
+                "id": "idea-batch-001",
+                "title": "Customer churn prevention",
+                "description": "Improve retention with governed AI workflows across CRM, billing, and support.",
+                "business_outcome": "Reduce churn and improve service responsiveness.",
+                "systems_involved": ["crm", "billing", "support"],
+                "required_data_sources": ["crm", "billing", "support"],
+                "dependencies": ["data-platform", "workflow-engine"],
+                "workflow_overlap": 1,
+            },
+            {
+                "id": "idea-batch-002",
+                "title": "Governance reporting automation",
+                "description": "Automate compliance reporting with workflow orchestration.",
+                "business_outcome": "Reduce manual audit preparation effort.",
+                "systems_involved": ["crm", "workflow-engine"],
+                "required_data_sources": ["crm"],
+                "dependencies": ["workflow-engine"],
+                "workflow_overlap": 0,
+            },
+        ],
+        "context": {
+            "service_telemetry": {"uptime": 99.9, "slo_breach_count": 0},
+            "incident_history": {"severity": 1},
+            "backlog_health": {"delivery_velocity": 3},
+            "architecture_metadata": {"legacy_systems": 1},
+        },
+    }
+
+    response = client.post("/audit/batch", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 2
+    assert len(response.json()["results"]) == 2
+    assert response.json()["results"][0]["idea_id"] == "idea-batch-001"
+
+
 def test_audits_list_and_artifact_endpoints():
     payload = {
         "idea": {
@@ -159,3 +199,13 @@ def test_calibration_endpoint():
     assert "calibration_factors" in response.json()
     assert "total_outcomes_recorded" in response.json()
     assert "feedback_history_size" in response.json()
+
+
+def test_knowledge_base_status_endpoint():
+    response = client.get("/knowledge-base/status")
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "demo_kb_for_local_working_demo"
+    domains = response.json()["domains"]
+    assert any(item["domain"] == "market" for item in domains)
+    assert all("refresh_mode" in item for item in domains)

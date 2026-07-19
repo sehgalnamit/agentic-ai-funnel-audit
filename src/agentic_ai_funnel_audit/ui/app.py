@@ -152,6 +152,7 @@ def knowledge_base():
     return render_template(
         "knowledge_base.html",
         grouped_documents=demo_kb.grouped_documents(),
+        domain_statuses=demo_kb.domain_statuses(),
         intake_template=intake_template,
     )
 

@@ -3,6 +3,9 @@ title: Enterprise AI Governance Guardrails
 compliance_score: 4
 restricted_terms: password, api key, private key, confidential, pii
 owner: risk-office
+refresh_mode: async
+refresh_cadence: monthly
+source_system: policy repository and control attestations
 ---
 # Enterprise AI Governance Guardrails
 
