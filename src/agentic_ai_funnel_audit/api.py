@@ -1,5 +1,6 @@
 from typing import Any
 import asyncio
+import json
 import os
 from pathlib import Path
 
@@ -71,6 +72,7 @@ class BatchAuditPayload(BaseModel):
     ideas: list[IdeaRequest]
     context: IdeaContext | None = Field(default=None)
     knowledge_base_mode: str | None = Field(default=None)
+    async_backend: str | None = Field(default=None)
 
 
 class KnowledgeIngestionRequest(BaseModel):
@@ -183,10 +185,28 @@ def audit_batch(payload: BatchAuditPayload):
 @app.post("/audit/batch/async")
 def audit_batch_async(payload: BatchAuditPayload):
     shared_context = payload.context.model_dump() if payload.context else {}
+    backend = _resolve_async_backend(payload.async_backend)
+
+    if backend == "pubsub":
+        envelope = {
+            "ideas": [idea.model_dump() for idea in payload.ideas],
+            "context": shared_context,
+            "knowledge_base_mode": payload.knowledge_base_mode or os.getenv("AGENTIC_KB_MODE", "demo"),
+        }
+        message_id = _publish_pubsub(envelope)
+        return {
+            "job_id": f"pubsub:{message_id}",
+            "status": "submitted",
+            "backend": "pubsub",
+            "count": len(payload.ideas),
+        }
+
     shared_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
     ideas = [idea.model_dump() for idea in payload.ideas]
     job = batch_job_manager.submit(ideas, shared_context)
-    return job.to_dict()
+    response = job.to_dict()
+    response["backend"] = "local"
+    return response
 
 
 @app.get("/audit/jobs/{job_id}")
@@ -237,6 +257,34 @@ def ingest_knowledge_snapshot(payload: KnowledgeIngestionRequest):
 def _resolve_knowledge_base(mode: str | None):
     requested_mode = (mode or os.getenv("AGENTIC_KB_MODE", "demo")).strip().lower()
     return load_knowledge_base(requested_mode)
+
+
+def _resolve_async_backend(backend: str | None) -> str:
+    resolved = (backend or os.getenv("AGENTIC_ASYNC_BACKEND", "local")).strip().lower()
+    if resolved not in {"local", "pubsub"}:
+        raise HTTPException(status_code=400, detail="async backend must be 'local' or 'pubsub'.")
+    return resolved
+
+
+def _publish_pubsub(envelope: dict[str, Any]) -> str:
+    topic_path = os.getenv("AGENTIC_PUBSUB_TOPIC", "").strip()
+    if not topic_path:
+        raise HTTPException(
+            status_code=400,
+            detail="AGENTIC_PUBSUB_TOPIC is required for pubsub backend. Expected: projects/<project>/topics/<topic>",
+        )
+    try:
+        from google.cloud import pubsub_v1  # type: ignore
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"google-cloud-pubsub is required for pubsub backend. Install dependency first. Error: {exc}",
+        )
+
+    publisher = pubsub_v1.PublisherClient()
+    payload = json.dumps(envelope).encode("utf-8")
+    future = publisher.publish(topic_path, payload)
+    return str(future.result(timeout=10))
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

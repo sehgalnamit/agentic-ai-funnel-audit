@@ -332,6 +332,8 @@ If you want model-driven scoring, set environment variables before running the s
 - `AGENTIC_USE_MODEL=true` - enable the optional scoring model
 - `AGENTIC_MODEL_NAME` - optional model name, defaults to `gpt-4o-mini`
 - `AGENTIC_KB_MODE=demo|production` - choose the local markdown demo KB or production snapshot mode
+- `AGENTIC_ASYNC_BACKEND=local|pubsub` - choose local in-memory queue or Pub/Sub publish path for `POST /audit/batch/async`
+- `AGENTIC_PUBSUB_TOPIC=projects/<project>/topics/<topic>` - required only when `AGENTIC_ASYNC_BACKEND=pubsub`
 
 ### Knowledge base modes
 
@@ -339,6 +341,83 @@ If you want model-driven scoring, set environment variables before running the s
 - `production` mode: reads asynchronously published domain snapshots under `knowledge_snapshots/`
 
 For local development, `production` mode falls back to the demo KB when no snapshots have been published yet. This keeps the app runnable on a laptop while preserving the production operating model.
+
+## Local + Production coexistence setup
+
+The system is designed to keep local demo mode intact while enabling production wiring incrementally.
+
+### Mode A: Local demo (default)
+
+1. Keep `AGENTIC_KB_MODE=demo`.
+2. Keep `AGENTIC_ASYNC_BACKEND=local` (or unset it).
+3. Run API/UI locally as usual.
+
+This uses:
+- local markdown KB in `demo_kb/`
+- local in-memory async batch queue for `/audit/batch/async`
+
+### Mode B: Production-like KB with local execution
+
+1. Set `AGENTIC_KB_MODE=production`.
+2. Publish domain snapshots via `POST /knowledge-base/ingest`.
+3. Keep `AGENTIC_ASYNC_BACKEND=local` while validating scoring quality.
+
+If some domains are missing in `knowledge_snapshots/`, the loader automatically fills missing domains from demo KB so local runs continue.
+
+### Mode C: Production async routing with Pub/Sub
+
+1. Keep your preferred KB mode (`demo` or `production`).
+2. Set `AGENTIC_ASYNC_BACKEND=pubsub`.
+3. Configure `AGENTIC_PUBSUB_TOPIC`.
+4. Call `POST /audit/batch/async` to publish job envelopes.
+
+In this mode, the API publishes messages and returns a `pubsub:<message_id>` job id.
+
+## Pub/Sub step-by-step configuration
+
+### 1. Create topic and subscription
+
+```bash
+gcloud config set project YOUR_PROJECT_ID
+gcloud pubsub topics create agentic-audit-batch
+gcloud pubsub subscriptions create agentic-audit-batch-sub \
+  --topic agentic-audit-batch
+```
+
+### 2. Configure service environment
+
+```bash
+export AGENTIC_ASYNC_BACKEND=pubsub
+export AGENTIC_PUBSUB_TOPIC=projects/YOUR_PROJECT_ID/topics/agentic-audit-batch
+export AGENTIC_KB_MODE=production
+```
+
+### 3. Publish async batch requests
+
+Send requests to:
+- `POST /audit/batch/async`
+
+Current service behavior:
+- local backend executes in-process queue and supports `GET /audit/jobs/{job_id}`
+- pubsub backend publishes envelope to topic and returns immediately
+
+### 4. Add worker deployment (recommended)
+
+Deploy a dedicated worker service (Cloud Run, GKE, or VM) subscribed to `agentic-audit-batch-sub` that:
+1. pulls envelopes from Pub/Sub
+2. resolves KB mode
+3. runs pipeline batch scoring
+4. writes artifacts/results to persistent storage
+5. optionally updates an external job status store
+
+This keeps API latency low and isolates compute-heavy scoring from request handling.
+
+## Incremental rollout recommendation
+
+1. Start with local demo mode for baseline checks.
+2. Enable production KB mode while still using local async backend.
+3. Enable Pub/Sub async backend after snapshot quality is stable.
+4. Introduce external worker and persistent job tracking for full production readiness.
 
 ### Confidence and human handoff
 
@@ -458,10 +537,10 @@ Quick steps:
 
 ## Next steps
 
-1. replace the markdown demo KB with vector, graph, and cache-backed enterprise memory services
-2. ingest strategy, data, market, and platform evidence asynchronously from authoritative company systems
-3. move routing and subagent execution to an event-driven actor mesh for higher throughput and stronger fault isolation
-4. wrap tools behind MCP and a zero-trust gateway with schema validation, RBAC, and OpenTelemetry tracing
+1. keep demo KB as fallback, and add vector, graph, and cache-backed enterprise memory as production mode
+2. operationalize asynchronous ingestion from strategy, data, market, and platform systems with ownership SLAs
+3. evolve local in-memory async queue into a durable actor mesh (Pub/Sub or Kafka plus worker autoscaling)
+4. wrap tool execution behind MCP and zero-trust gateway controls (schema validation, RBAC, OpenTelemetry)
 
 ## License
 

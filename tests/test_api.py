@@ -127,6 +127,25 @@ def test_async_batch_audit_job_endpoint():
     assert latest is not None
     assert latest.json()["status"] == "completed"
     assert latest.json()["results"][0]["idea_id"] == "idea-async-001"
+    assert latest.json()["backend"] == "local"
+
+
+def test_async_batch_pubsub_backend_requires_topic():
+    payload = {
+        "ideas": [
+            {
+                "id": "idea-async-pubsub-001",
+                "title": "PubSub test",
+                "description": "Test pubsub backend configuration.",
+            }
+        ],
+        "async_backend": "pubsub",
+    }
+
+    response = client.post("/audit/batch/async", json=payload)
+
+    assert response.status_code == 400
+    assert "AGENTIC_PUBSUB_TOPIC" in response.json()["detail"]
 
 
 def test_audits_list_and_artifact_endpoints():

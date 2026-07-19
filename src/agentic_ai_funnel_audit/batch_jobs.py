@@ -22,11 +22,13 @@ class BatchAuditJob:
     context: dict[str, Any]
     results: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
+    backend: str = "local"
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "job_id": self.id,
             "status": self.status,
+            "backend": self.backend,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "results": self.results,
