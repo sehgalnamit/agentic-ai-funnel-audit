@@ -298,14 +298,58 @@ This avoids a scenario where one weak domain is hidden by strong scores in other
 
 ## How to run locally
 
+Use these steps from a clean clone so anyone can run and test the project locally.
+
+### 1. Create and activate a virtual environment
+
 ```bash
-python -m src.agentic_ai_funnel_audit.demo
+python -m venv .venv
 ```
 
-The API can also be run via the FastAPI service:
+PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+### 2. Install dependencies
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .
+python -m pip install pytest
+```
+
+### 3. Run automated tests
+
+```bash
+python -m pytest -q
+```
+
+### 4. Run the demo/API/UI locally
+
+Demo script:
+
+```bash
+python -m agentic_ai_funnel_audit.demo
+```
+
+FastAPI service:
 
 ```bash
 uvicorn agentic_ai_funnel_audit.api:app --host 0.0.0.0 --port 8000
+```
+
+Flask manager UI:
+
+```bash
+python -m agentic_ai_funnel_audit.ui.app
 ```
 
 Available endpoints:
@@ -570,6 +614,34 @@ A recommended GCP stack:
 - **Secret Manager** for any credentials or model keys
 - **Pub/Sub** or **Workflows** if you want to connect the idea intake pipeline to external event streams
 
+### GCP infrastructure diagram
+
+```mermaid
+flowchart TD
+  Dev[Developer or CI] --> CB[Cloud Build]
+  CB --> AR[Artifact Registry]
+
+  User[Browser or API client] --> LB[HTTPS endpoint]
+  LB --> API[Cloud Run Service: audit API]
+
+  API --> SM[Secret Manager]
+  API --> GCS[Cloud Storage: artifacts and logs]
+  API --> PS[Pub/Sub Topic: audit-batch]
+
+  PS --> SUB[Pub/Sub Subscription: audit-batch-sub]
+  SUB --> WRK[Cloud Run Service: pubsub worker]
+
+  WRK --> KB[Knowledge Snapshots / Domain KB]
+  WRK --> GCS
+
+  API --> OTEL[OTLP Export]
+  WRK --> OTEL
+  OTEL --> DT[Dynatrace Observability]
+
+  AR --> API
+  AR --> WRK
+```
+
 ### Example deployment flow
 
 ```bash
@@ -584,18 +656,6 @@ gcloud run deploy agentic-ai-funnel-audit \
 ```
 
 If you want to deploy as part of a data-driven funnel, add a Cloud Run trigger for Pub/Sub or HTTP event input.
-
-## Completed features
-
-- ✅ model-driven and prompt-based evaluation through optional OpenAI integration
-- ✅ leader-facing API and dashboard for reviewing gate results, overrides, and audit trails
-- ✅ formal audit artifacts and exportable compliance reports
-- ✅ policy hooks for organization-specific scoring weights and approval thresholds
-- ✅ feedback loop infrastructure with outcome tracking and recommendation calibration
-- ✅ CLI for batch processing and JSON exports
-- ✅ pluggable operational data connectors (telemetry, incidents, backlog, architecture)
-- ✅ event-driven ingestion via Pub/Sub
-- ✅ production-ready GCP deployment (Cloud Run, Artifact Registry, Secret Manager)
 
 ## Production Deployment
 

@@ -12,6 +12,32 @@ This guide walks through deploying the agentic AI funnel audit service to Google
 
 ## Quick Start
 
+## End-to-End GCP Architecture
+
+```mermaid
+flowchart TD
+  Dev[Developer or CI] --> Build[Cloud Build]
+  Build --> Registry[Artifact Registry]
+
+  Client[Client App or Reviewer] --> ApiRun[Cloud Run: API Service]
+  Registry --> ApiRun
+
+  ApiRun --> Secrets[Secret Manager]
+  ApiRun --> Topic[Pub/Sub Topic]
+  ApiRun --> Storage[Cloud Storage]
+
+  Topic --> Sub[Pub/Sub Subscription]
+  Sub --> WorkerRun[Cloud Run: Worker Service]
+  Registry --> WorkerRun
+
+  WorkerRun --> Storage
+  WorkerRun --> KBSnapshots[Knowledge Snapshots]
+
+  ApiRun --> Otlp[OTLP Export]
+  WorkerRun --> Otlp
+  Otlp --> Dynatrace[Dynatrace]
+```
+
 ### 1. Prepare the Container Image
 
 ```bash

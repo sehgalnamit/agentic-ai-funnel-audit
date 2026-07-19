@@ -525,5 +525,4 @@ class AuditPipeline:
             "policy": policy,
             "report": report,
             "model_insights": model_insights,
-            "generated_by": "agentic-ai-funnel-audit",
         }
