@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 from pathlib import Path
 import re
 from typing import Any, Iterable
@@ -97,6 +99,28 @@ class DemoKnowledgeBase:
             )
         return cls(documents)
 
+    @classmethod
+    def from_snapshot_directory(cls, root: Path) -> "DemoKnowledgeBase":
+        documents: list[KnowledgeDocument] = []
+        for path in sorted(root.rglob("*.json")):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            domain = str(payload.get("domain", path.parent.name)).lower()
+            metadata = dict(payload.get("metadata") or {})
+            metadata.setdefault("owner", payload.get("owner", "unknown"))
+            metadata.setdefault("refresh_mode", payload.get("refresh_mode", "async"))
+            metadata.setdefault("refresh_cadence", payload.get("refresh_cadence", "daily"))
+            metadata.setdefault("source_system", payload.get("source_system", "snapshot"))
+            documents.append(
+                KnowledgeDocument(
+                    id=f"{domain}/{path.stem}",
+                    domain=domain,
+                    title=str(payload.get("title", path.stem.replace('-', ' ').title())),
+                    content=str(payload.get("content", "")).strip(),
+                    metadata=metadata,
+                )
+            )
+        return cls(documents)
+
     def search(self, domain: str, query: str, limit: int = 3) -> list[KnowledgeHit]:
         domain_docs = [doc for doc in self.documents if doc.domain == domain]
         query_tokens = _tokenize(query)
@@ -141,6 +165,7 @@ class DemoKnowledgeBase:
 
 
 _cached_demo_kb: DemoKnowledgeBase | None = None
+_cached_production_kb: DemoKnowledgeBase | None = None
 
 
 def load_demo_knowledge_base(root: Path | None = None) -> DemoKnowledgeBase:
@@ -149,6 +174,22 @@ def load_demo_knowledge_base(root: Path | None = None) -> DemoKnowledgeBase:
     if _cached_demo_kb is None:
         _cached_demo_kb = DemoKnowledgeBase.from_directory(kb_root)
     return _cached_demo_kb
+
+
+def load_production_knowledge_base(root: Path | None = None) -> DemoKnowledgeBase:
+    global _cached_production_kb
+    kb_root = root or Path(__file__).resolve().parents[2] / "knowledge_snapshots"
+    if _cached_production_kb is None:
+        loaded = DemoKnowledgeBase.from_snapshot_directory(kb_root)
+        _cached_production_kb = loaded if loaded.documents else load_demo_knowledge_base()
+    return _cached_production_kb
+
+
+def load_knowledge_base(mode: str | None = None) -> DemoKnowledgeBase:
+    resolved_mode = (mode or os.getenv("AGENTIC_KB_MODE", "demo")).strip().lower()
+    if resolved_mode == "production":
+        return load_production_knowledge_base()
+    return load_demo_knowledge_base()
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:

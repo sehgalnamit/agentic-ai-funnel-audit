@@ -313,6 +313,7 @@ Available endpoints:
 - `GET /audit/{idea_id}/enrich` - fetch enriched context from operational data sources (requires `service_id` and `team_id` query params)
 - `POST /audit/{idea_id}/override` - apply an executive override to a saved audit
 - `GET /knowledge-base/status` - inspect domain ownership and refresh metadata for KB-backed agents
+- `POST /knowledge-base/ingest` - submit an asynchronous domain snapshot update for production-style KB maintenance
 - `GET /dashboard` - HTML dashboard with audit history
 - `POST /outcomes` - record an outcome for a completed idea
 - `GET /outcomes` - list all recorded outcomes
@@ -323,6 +324,14 @@ If you want model-driven scoring, set environment variables before running the s
 - `OPENAI_API_KEY` - your OpenAI credential
 - `AGENTIC_USE_MODEL=true` - enable the optional scoring model
 - `AGENTIC_MODEL_NAME` - optional model name, defaults to `gpt-4o-mini`
+- `AGENTIC_KB_MODE=demo|production` - choose the local markdown demo KB or production snapshot mode
+
+### Knowledge base modes
+
+- `demo` mode: reads the working local documents under `demo_kb/`
+- `production` mode: reads asynchronously published domain snapshots under `knowledge_snapshots/`
+
+For local development, `production` mode falls back to the demo KB when no snapshots have been published yet. This keeps the app runnable on a laptop while preserving the production operating model.
 
 ### Free Groq key for demo use
 

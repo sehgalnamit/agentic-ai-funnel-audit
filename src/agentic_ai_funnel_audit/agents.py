@@ -137,18 +137,16 @@ class DataReadinessAgent(Agent):
         )
 
 
-class InternalOperationsAgent(Agent):
+class ArchitectureReadinessAgent(Agent):
     def __init__(self):
-        super().__init__("Internal Operations Agent")
+        super().__init__("Architecture Readiness Agent")
 
     def evaluate(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AgentEvaluation:
         dependencies = idea.get("dependencies") or idea.get("systems_involved") or []
         dependency_list = _csv_items(dependencies)
-        data_readiness = context.get("data_readiness_score", context.get("data_maturity", 3))
         workflow_overlap = int(idea.get("workflow_overlap", 0))
         service_telemetry = context.get("service_telemetry") or {}
         incident_history = context.get("incident_history") or {}
-        backlog_health = context.get("backlog_health") or {}
         architecture_metadata = context.get("architecture_metadata") or {}
         kb = self._knowledge_base(context)
         query = " ".join(dependency_list) or _build_query(idea, "description", "title", "current_process")
@@ -163,17 +161,16 @@ class InternalOperationsAgent(Agent):
             risk_penalty += 1
         if incident_history.get("severity", 0) >= 3:
             risk_penalty += 1
-        if backlog_health.get("delivery_velocity", 3) <= 2:
-            risk_penalty += 1
         if architecture_metadata.get("legacy_systems", 0) > 2:
             risk_penalty += 1
         if tech_hits and len(dependency_list) >= 4:
             risk_penalty += 1
 
-        readiness_score = _clamp_score(int(data_readiness) + 2 - risk_penalty)
+        kb_scores = [int(hit.document.metadata.get("readiness_score", 3)) for hit in tech_hits] or [3]
+        readiness_score = _clamp_score(round(sum(kb_scores) / len(kb_scores)) + 1 - risk_penalty)
         rationale = (
-            f"Dependencies: {len(dependency_list)}, data readiness: {data_readiness}, "
-            f"workflow overlap: {workflow_overlap}."
+            f"Dependencies: {len(dependency_list)}, workflow overlap: {workflow_overlap}, "
+            f"legacy systems: {architecture_metadata.get('legacy_systems', 0)}."
         )
         if tech_hits:
             rationale += f" Retrieved {len(tech_hits)} technology KB document(s) to estimate integration complexity."
@@ -184,13 +181,83 @@ class InternalOperationsAgent(Agent):
             rationale=rationale,
             details={
                 "dependencies": dependency_list,
-                "data_readiness": data_readiness,
                 "workflow_overlap": workflow_overlap,
                 "service_telemetry": service_telemetry,
                 "incident_history": incident_history,
-                "backlog_health": backlog_health,
                 "architecture_metadata": architecture_metadata,
                 "evidence": _evidence_from_hits(tech_hits),
+            },
+        )
+
+
+class DeliveryCapacityAgent(Agent):
+    def __init__(self):
+        super().__init__("Delivery Capacity Agent")
+
+    def evaluate(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AgentEvaluation:
+        backlog_health = context.get("backlog_health") or {}
+        architecture_metadata = context.get("architecture_metadata") or {}
+        required_sources = _csv_items(idea.get("required_data_sources") or [])
+        timeline = str(idea.get("delivery_timeline") or context.get("delivery_timeline") or "").lower()
+
+        base = 4
+        if backlog_health.get("delivery_velocity", 3) <= 2:
+            base -= 2
+        elif backlog_health.get("delivery_velocity", 3) == 3:
+            base -= 1
+        if architecture_metadata.get("integration_count", len(idea.get("dependencies") or [])) >= 4:
+            base -= 1
+        if len(required_sources) >= 4:
+            base -= 1
+        if "6 week" in timeline or "4 week" in timeline or "30 day" in timeline:
+            base -= 1
+
+        score = _clamp_score(base)
+        rationale = (
+            f"Delivery velocity: {backlog_health.get('delivery_velocity', 'unknown')}, "
+            f"integration count: {architecture_metadata.get('integration_count', 'unknown')}, "
+            f"required data sources: {len(required_sources)}."
+        )
+        if timeline:
+            rationale += f" Requested timeline: {timeline}."
+
+        return AgentEvaluation(
+            name=self.name,
+            score=score,
+            rationale=rationale,
+            details={
+                "backlog_health": backlog_health,
+                "architecture_metadata": architecture_metadata,
+                "required_data_sources": required_sources,
+                "timeline": timeline,
+                "evidence": [],
+            },
+        )
+
+
+class InternalOperationsAgent(Agent):
+    def __init__(self):
+        super().__init__("Internal Operations Agent")
+
+    def evaluate(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AgentEvaluation:
+        data_readiness = context.get("data_readiness_score", context.get("data_maturity", 3))
+        architecture_score = int(context.get("architecture_readiness_score", 3))
+        delivery_score = int(context.get("delivery_capacity_score", 3))
+        score = _clamp_score(round((int(data_readiness) + architecture_score + delivery_score) / 3))
+        rationale = (
+            f"Operational readiness combines data readiness {data_readiness}, "
+            f"architecture readiness {architecture_score}, and delivery capacity {delivery_score}."
+        )
+
+        return AgentEvaluation(
+            name=self.name,
+            score=score,
+            rationale=rationale,
+            details={
+                "data_readiness": data_readiness,
+                "architecture_readiness": architecture_score,
+                "delivery_capacity": delivery_score,
+                "evidence": [],
             },
         )
 

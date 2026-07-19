@@ -205,7 +205,27 @@ def test_knowledge_base_status_endpoint():
     response = client.get("/knowledge-base/status")
 
     assert response.status_code == 200
-    assert response.json()["mode"] == "demo_kb_for_local_working_demo"
+    assert response.json()["mode"] in {"demo", "production"}
     domains = response.json()["domains"]
     assert any(item["domain"] == "market" for item in domains)
     assert all("refresh_mode" in item for item in domains)
+
+
+def test_knowledge_base_ingestion_endpoint():
+    payload = {
+        "domain": "market",
+        "owner": "market-intelligence",
+        "source_system": "analyst-feed",
+        "refresh_mode": "async",
+        "refresh_cadence": "daily",
+        "content_type": "markdown",
+        "title": "New trend snapshot",
+        "content": "Macro trend shows stronger cost pressure and higher demand for governed AI.",
+        "metadata": {"trend_score": 4, "market_risk": 2},
+    }
+
+    response = client.post("/knowledge-base/ingest", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+    assert response.json()["domain"] == "market"

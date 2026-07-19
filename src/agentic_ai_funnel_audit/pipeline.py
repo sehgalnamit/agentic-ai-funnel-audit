@@ -7,12 +7,14 @@ from .agents import (
     AgentEvaluation,
     StrategicAlignmentAgent,
     DataReadinessAgent,
+    ArchitectureReadinessAgent,
+    DeliveryCapacityAgent,
     InternalOperationsAgent,
     MarketSignalAgent,
     DeliberativeSandboxAgent,
 )
 from .governance import ModelArmor, SafetyAgent
-from .knowledge_base import load_demo_knowledge_base
+from .knowledge_base import load_knowledge_base
 from .modeling import ModelEvaluator
 
 
@@ -36,13 +38,15 @@ class AuditPipeline:
     def __init__(self):
         self.strategic_agent = StrategicAlignmentAgent()
         self.data_agent = DataReadinessAgent()
+        self.architecture_agent = ArchitectureReadinessAgent()
+        self.delivery_agent = DeliveryCapacityAgent()
         self.internal_agent = InternalOperationsAgent()
         self.market_agent = MarketSignalAgent()
         self.deliberative_agent = DeliberativeSandboxAgent()
         self.safety_agent = SafetyAgent()
         self.model_armor = ModelArmor()
         self.model_evaluator = ModelEvaluator()
-        self.knowledge_base = load_demo_knowledge_base()
+        self.knowledge_base = load_knowledge_base()
 
     def run(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AuditResult:
         runtime_context = dict(context)
@@ -51,19 +55,25 @@ class AuditPipeline:
         strategic = self.strategic_agent.evaluate(idea, runtime_context)
         data = self.data_agent.evaluate(idea, runtime_context)
         runtime_context["data_readiness_score"] = data.score
+        architecture = self.architecture_agent.evaluate(idea, runtime_context)
+        runtime_context["architecture_readiness_score"] = architecture.score
+        delivery = self.delivery_agent.evaluate(idea, runtime_context)
+        runtime_context["delivery_capacity_score"] = delivery.score
         safety = self.safety_agent.evaluate(idea, runtime_context)
         internal = self.internal_agent.evaluate(idea, runtime_context)
         market = self.market_agent.evaluate(idea, runtime_context)
         model_insights = self._build_model_insights(idea, runtime_context)
         internal, market = self._apply_model_insights(internal, market, model_insights)
-        deliberative = self.deliberative_agent.evaluate([strategic, data, internal, market, safety])
+        deliberative = self.deliberative_agent.evaluate([strategic, data, architecture, delivery, internal, market, safety])
 
-        iso_scores = self._score_iso_domains(strategic, data, internal, market, safety)
+        iso_scores = self._score_iso_domains(strategic, data, architecture, delivery, internal, market, safety)
         policy = self._resolve_policy(runtime_context)
         feedback_adjustment = self._compute_feedback_adjustment(idea, runtime_context)
         weighted_score = self._apply_policy_weights(
             strategic=strategic,
             data=data,
+            architecture=architecture,
+            delivery=delivery,
             internal=internal,
             market=market,
             safety=safety,
@@ -84,6 +94,8 @@ class AuditPipeline:
             runtime_context,
             strategic,
             data,
+            architecture,
+            delivery,
             internal,
             market,
             safety,
@@ -107,7 +119,7 @@ class AuditPipeline:
 
         return AuditResult(
             idea_id=idea.get("id", "unknown"),
-            evaluations=[strategic, data, internal, market, safety],
+            evaluations=[strategic, data, architecture, delivery, internal, market, safety],
             deliberation=deliberative,
             iso_scores=iso_scores,
             final_score=final_score,
@@ -133,13 +145,15 @@ class AuditPipeline:
         self,
         strategic: AgentEvaluation,
         data: AgentEvaluation,
+        architecture: AgentEvaluation,
+        delivery: AgentEvaluation,
         internal: AgentEvaluation,
         market: AgentEvaluation,
         safety: AgentEvaluation,
     ) -> Dict[str, int]:
         strategic_alignment = min(5, max(1, strategic.score))
-        constraint_fit = min(5, max(1, round((data.score + internal.score + market.score) / 3)))
-        technical_feasibility = min(5, max(1, internal.score))
+        constraint_fit = min(5, max(1, round((data.score + delivery.score + market.score) / 3)))
+        technical_feasibility = min(5, max(1, round((architecture.score + internal.score) / 2)))
         compliance_readiness = min(5, max(1, safety.score))
 
         return {
@@ -159,7 +173,9 @@ class AuditPipeline:
             "weights": policy.get("weights") or {
                 "strategic": 0.2,
                 "data": 0.2,
-                "operational": 0.2,
+                "architecture": 0.1,
+                "delivery": 0.1,
+                "operational": 0.1,
                 "market": 0.15,
                 "governance": 0.25,
             },
@@ -169,6 +185,8 @@ class AuditPipeline:
         self,
         strategic: AgentEvaluation,
         data: AgentEvaluation,
+        architecture: AgentEvaluation,
+        delivery: AgentEvaluation,
         internal: AgentEvaluation,
         market: AgentEvaluation,
         safety: AgentEvaluation,
@@ -179,7 +197,9 @@ class AuditPipeline:
         has_custom_weights = bool(weights)
         strategic_weight = weights.get("strategic", 0.0 if has_custom_weights else 0.2)
         data_weight = weights.get("data", 0.0 if has_custom_weights else 0.2)
-        operational_weight = weights.get("operational", 0.2 if not has_custom_weights else 0.0)
+        architecture_weight = weights.get("architecture", 0.0 if has_custom_weights else 0.1)
+        delivery_weight = weights.get("delivery", 0.0 if has_custom_weights else 0.1)
+        operational_weight = weights.get("operational", 0.1 if not has_custom_weights else 0.0)
         market_weight = weights.get("market", 0.15 if not has_custom_weights else 0.0)
         governance_weight = weights.get("governance", 0.25 if not has_custom_weights else 0.0)
         deliberative_weight = 0.1
@@ -187,12 +207,14 @@ class AuditPipeline:
         weighted_sum = (
             strategic.score * strategic_weight
             + data.score * data_weight
+            + architecture.score * architecture_weight
+            + delivery.score * delivery_weight
             + internal.score * operational_weight
             + market.score * market_weight
             + safety.score * governance_weight
             + deliberative.score * deliberative_weight
         )
-        total_weight = strategic_weight + data_weight + operational_weight + market_weight + governance_weight + deliberative_weight
+        total_weight = strategic_weight + data_weight + architecture_weight + delivery_weight + operational_weight + market_weight + governance_weight + deliberative_weight
         return weighted_sum / total_weight
 
     def _compute_feedback_adjustment(self, idea: Dict[str, Any], context: Dict[str, Any]) -> int:
@@ -257,6 +279,8 @@ class AuditPipeline:
         context: Dict[str, Any],
         strategic: AgentEvaluation,
         data: AgentEvaluation,
+        architecture: AgentEvaluation,
+        delivery: AgentEvaluation,
         internal: AgentEvaluation,
         market: AgentEvaluation,
         safety: AgentEvaluation,
@@ -267,7 +291,7 @@ class AuditPipeline:
         model_insights: Dict[str, Any],
     ) -> Dict[str, Any]:
         recommended_action = "Proceed with a controlled pilot" if pass_gate else "Rework the proposal before funding"
-        investment = self._build_investment_recommendation(strategic, data, internal, market, pass_gate)
+        investment = self._build_investment_recommendation(strategic, data, architecture, delivery, internal, market, pass_gate)
         report = {
             "executive_summary": (
                 f"{idea.get('id', 'idea')} received a {final_score}/5 score and {'passed' if pass_gate else 'did not pass'} the review gate."
@@ -280,6 +304,8 @@ class AuditPipeline:
             "evidence_by_agent": {
                 strategic.name: strategic.details.get("evidence", []),
                 data.name: data.details.get("evidence", []),
+                architecture.name: architecture.details.get("evidence", []),
+                delivery.name: delivery.details.get("evidence", []),
                 internal.name: internal.details.get("evidence", []),
                 market.name: market.details.get("evidence", []),
                 safety.name: safety.details.get("evidence", []),
@@ -305,6 +331,8 @@ class AuditPipeline:
         self,
         strategic: AgentEvaluation,
         data: AgentEvaluation,
+        architecture: AgentEvaluation,
+        delivery: AgentEvaluation,
         internal: AgentEvaluation,
         market: AgentEvaluation,
         pass_gate: bool,
@@ -325,12 +353,20 @@ class AuditPipeline:
                 "estimated_investment_band": "medium-high",
             }
 
-        if strategic.score >= 4 and internal.score <= 2:
+        if strategic.score >= 4 and architecture.score <= 2:
             return {
                 "route": "incubate_architecture",
                 "summary": "Idea is valuable but technical complexity is high. Resolve architecture and delivery constraints before launch.",
                 "priority_investments": ["platform integration", "workflow redesign", "delivery capacity"],
                 "estimated_investment_band": "medium-high",
+            }
+
+        if strategic.score >= 4 and delivery.score <= 2:
+            return {
+                "route": "expand_delivery_capacity",
+                "summary": "Idea is promising but delivery bandwidth is weak. Improve team capacity or sequencing before committing to the pilot.",
+                "priority_investments": ["team capacity", "delivery sequencing", "platform enablement"],
+                "estimated_investment_band": "medium",
             }
 
         if market.score <= 2:

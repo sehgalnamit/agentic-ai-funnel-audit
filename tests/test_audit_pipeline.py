@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -218,3 +219,23 @@ def test_pipeline_derives_scores_from_demo_kb_without_manual_self_scores():
     }
     assert result.report["evidence_by_agent"]["Strategic Alignment Agent"]
     assert result.report["evidence_by_agent"]["Data Readiness Agent"]
+
+
+def test_pipeline_supports_production_kb_mode_with_local_fallback(monkeypatch):
+    monkeypatch.setenv("AGENTIC_KB_MODE", "production")
+    pipeline = AuditPipeline()
+
+    result = pipeline.run(
+        {
+            "id": "idea-prod-fallback",
+            "title": "Retention workflow",
+            "description": "Use governed AI workflows to improve retention across CRM and billing.",
+            "business_outcome": "Reduce churn.",
+            "systems_involved": ["crm", "billing"],
+            "required_data_sources": ["crm", "billing"],
+            "dependencies": ["data-platform"],
+        },
+        {"service_telemetry": {"uptime": 99.9, "slo_breach_count": 0}},
+    )
+
+    assert result.report["evidence_by_agent"]["Strategic Alignment Agent"]

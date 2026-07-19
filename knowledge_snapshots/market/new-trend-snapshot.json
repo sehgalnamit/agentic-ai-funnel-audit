@@ -1,0 +1,15 @@
+{
+  "domain": "market",
+  "owner": "market-intelligence",
+  "source_system": "analyst-feed",
+  "refresh_mode": "async",
+  "refresh_cadence": "daily",
+  "content_type": "markdown",
+  "title": "New trend snapshot",
+  "content": "Macro trend shows stronger cost pressure and higher demand for governed AI.",
+  "metadata": {
+    "trend_score": 4,
+    "market_risk": 2
+  },
+  "created_at": "2026-07-19T03:43:28.662021+00:00"
+}
