@@ -1,10 +1,17 @@
 {% extends 'base.html' %}
 {% block content %}
-  <h1>Ideal Intake</h1>
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <h1>Idea Intake</h1>
+      <p class="text-muted mb-0">Submit facts, not self-scores. The agents will retrieve evidence from the demo knowledge base.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('knowledge_base') }}">View demo KB</a>
+  </div>
+
   <div class="d-flex gap-2 mb-3">
-    <button type="button" class="btn btn-outline-success" id="loadPassCase">Load PASS test case</button>
-    <button type="button" class="btn btn-outline-warning" id="loadBorderlineCase">Load BORDERLINE test case</button>
-    <button type="button" class="btn btn-outline-danger" id="loadFailCase">Load FAIL test case</button>
+    <button type="button" class="btn btn-outline-success" id="loadPassCase">Load PASS case</button>
+    <button type="button" class="btn btn-outline-warning" id="loadFoundationCase">Load FOUNDATION-FIRST case</button>
+    <button type="button" class="btn btn-outline-danger" id="loadFailCase">Load FAIL case</button>
   </div>
 
   <form method="post" id="intakeForm">
@@ -17,64 +24,81 @@
       <input name="title" id="title" class="form-control" required>
     </div>
     <div class="mb-3">
-      <label class="form-label">Description</label>
-      <textarea name="description" id="description" class="form-control" rows="4"></textarea>
+      <label class="form-label">Problem Statement</label>
+      <textarea name="problem_statement" id="problem_statement" class="form-control" rows="3" required></textarea>
     </div>
     <div class="row">
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Owner</label>
-        <input name="owner" id="owner" class="form-control">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Business Outcome</label>
+        <textarea name="business_outcome" id="business_outcome" class="form-control" rows="3"></textarea>
       </div>
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Estimated Benefit</label>
+      <div class="col-md-3 mb-3">
+        <label class="form-label">Sponsor</label>
+        <input name="sponsor" id="sponsor" class="form-control">
+      </div>
+      <div class="col-md-3 mb-3">
+        <label class="form-label">KPI / Estimated Benefit</label>
         <input name="estimated_benefit" id="estimated_benefit" class="form-control">
       </div>
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Data Maturity (1-5)</label>
-        <select name="data_maturity" id="data_maturity" class="form-select">
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3" selected>3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-        </select>
-      </div>
     </div>
 
     <div class="row">
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Dependencies Count</label>
-        <input name="dependencies_count" id="dependencies_count" type="number" class="form-control" min="0" value="1">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Target Users / Teams</label>
+        <input name="target_users" id="target_users" class="form-control" placeholder="customer success, support leadership">
       </div>
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Workflow Overlap (0-3)</label>
-        <input name="workflow_overlap" id="workflow_overlap" type="number" class="form-control" min="0" max="3" value="0">
+      <div class="col-md-3 mb-3">
+        <label class="form-label">Geographic / Regulatory Scope</label>
+        <input name="geographic_scope" id="geographic_scope" class="form-control" placeholder="APAC, EU, global">
       </div>
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Strategic Fit (1-5)</label>
-        <input name="strategic_fit" id="strategic_fit" type="number" class="form-control" min="1" max="5" value="3">
+      <div class="col-md-3 mb-3">
+        <label class="form-label">Delivery Timeline</label>
+        <input name="delivery_timeline" id="delivery_timeline" class="form-control" placeholder="Pilot in 12 weeks">
       </div>
     </div>
 
+    <div class="mb-3">
+      <label class="form-label">Current Process Today</label>
+      <textarea name="current_process" id="current_process" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Systems Involved</label>
+      <input name="systems_involved" id="systems_involved" class="form-control" placeholder="crm, billing, support, workflow-engine">
+      <div class="form-text">Comma-separated list. The technical agent will infer dependency complexity from this.</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Required Data Sources</label>
+      <input name="required_data_sources" id="required_data_sources" class="form-control" placeholder="crm, billing, support, product telemetry">
+      <div class="form-text">Comma-separated list. The data readiness agent will check KB coverage and gaps.</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Known Dependencies</label>
+      <input name="known_dependencies" id="known_dependencies" class="form-control" placeholder="data-platform, workflow-engine">
+    </div>
+
     <div class="row">
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Trend Score (1-5)</label>
-        <input name="trend_score" id="trend_score" type="number" class="form-control" min="1" max="5" value="3">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">AI / Automation Pattern</label>
+        <input name="ai_pattern" id="ai_pattern" class="form-control" placeholder="prediction + human-in-the-loop workflow">
       </div>
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Competitor Signal (1-5)</label>
-        <input name="competitor_signal" id="competitor_signal" type="number" class="form-control" min="1" max="5" value="3">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Human Review Points</label>
+        <input name="human_review" id="human_review" class="form-control" placeholder="manager approval before customer action">
       </div>
-      <div class="col-md-4 mb-3">
-        <label class="form-label">Market Risk (1-5)</label>
-        <input name="market_risk" id="market_risk" type="number" class="form-control" min="1" max="5" value="3">
-      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Known Risks or Constraints</label>
+      <textarea name="known_risks" id="known_risks" class="form-control" rows="3"></textarea>
     </div>
 
     <div class="form-check mb-3">
       <input class="form-check-input" type="checkbox" value="1" name="contains_sensitive_concepts" id="containsSensitiveConcepts">
       <label class="form-check-label" for="containsSensitiveConcepts">
-        Contains sensitive/proprietary information
+        Submission may contain sensitive/proprietary information
       </label>
     </div>
     <button class="btn btn-primary">Submit Intake</button>
@@ -96,33 +120,41 @@
     document.getElementById("loadPassCase").addEventListener("click", () => {
       fillCase({
         title: "Predict churn for premium customers",
-        description: "Use customer service, billing, and campaign data to identify churn risk and propose targeted retention actions.",
-        owner: "Demo Owner",
-        estimated_benefit: "250",
-        data_maturity: 4,
-        dependencies_count: 1,
-        workflow_overlap: 0,
-        strategic_fit: 5,
-        trend_score: 4,
-        competitor_signal: 4,
-        market_risk: 2,
+        problem_statement: "Customer retention teams react too late because churn signals are spread across billing, CRM, and support.",
+        business_outcome: "Reduce premium customer churn and improve service productivity through earlier intervention.",
+        sponsor: "Chief Customer Officer",
+        estimated_benefit: "Retention rate +3%",
+        target_users: "customer success, support leadership",
+        geographic_scope: "global",
+        delivery_timeline: "Pilot in 12 weeks",
+        current_process: "Teams manually combine CRM notes and billing events in spreadsheets before contacting customers.",
+        systems_involved: "crm, billing, workflow-engine",
+        required_data_sources: "crm, billing, support, product telemetry",
+        known_dependencies: "data-platform, workflow-engine",
+        ai_pattern: "churn prediction with human review",
+        human_review: "success manager approves outreach",
+        known_risks: "Need stronger customer identity resolution before scale.",
         containsSensitiveConcepts: false,
       });
     });
 
-    document.getElementById("loadBorderlineCase").addEventListener("click", () => {
+    document.getElementById("loadFoundationCase").addEventListener("click", () => {
       fillCase({
-        title: "Automate weekly governance reporting",
-        description: "Automate governance reports from operations and customer support systems with moderate legacy integration needs.",
-        owner: "Demo Owner",
-        estimated_benefit: "120",
-        data_maturity: 3,
-        dependencies_count: 2,
-        workflow_overlap: 1,
-        strategic_fit: 3,
-        trend_score: 3,
-        competitor_signal: 3,
-        market_risk: 3,
+        title: "Customer health risk orchestration",
+        problem_statement: "The company cannot act on customer health risk early because support and telemetry are not joined consistently.",
+        business_outcome: "Create a governed risk signal that improves retention decisions over time.",
+        sponsor: "CTAO",
+        estimated_benefit: "Foundation for retention use cases",
+        target_users: "data office, customer success",
+        geographic_scope: "global",
+        delivery_timeline: "Foundation in 16 weeks",
+        current_process: "Support and telemetry reports are reviewed independently with no canonical customer history.",
+        systems_involved: "crm, billing, support, product telemetry",
+        required_data_sources: "crm, billing, support, product telemetry",
+        known_dependencies: "data-platform, workflow-engine, support",
+        ai_pattern: "risk scoring and workflow orchestration",
+        human_review: "team lead reviews each intervention",
+        known_risks: "Identity resolution and lineage are not production-grade yet.",
         containsSensitiveConcepts: false,
       });
     });
@@ -130,16 +162,20 @@
     document.getElementById("loadFailCase").addEventListener("click", () => {
       fillCase({
         title: "Legacy approvals with confidential keys",
-        description: "Automate approvals across legacy systems and include api key material in prompt for faster implementation.",
-        owner: "Demo Owner",
-        estimated_benefit: "40",
-        data_maturity: 1,
-        dependencies_count: 4,
-        workflow_overlap: 3,
-        strategic_fit: 2,
-        trend_score: 1,
-        competitor_signal: 1,
-        market_risk: 5,
+        problem_statement: "Automate approvals across legacy systems and include api key material in prompts to accelerate implementation.",
+        business_outcome: "Reduce approval handling time.",
+        sponsor: "Operations Manager",
+        estimated_benefit: "Small local efficiency gain",
+        target_users: "back-office operations",
+        geographic_scope: "regional",
+        delivery_timeline: "Pilot in 6 weeks",
+        current_process: "Staff copy information from legacy systems and route emails manually.",
+        systems_involved: "legacy-erp, legacy-support, billing, approvals",
+        required_data_sources: "legacy approvals, support extracts",
+        known_dependencies: "legacy-erp, approvals",
+        ai_pattern: "prompt-based automation",
+        human_review: "none",
+        known_risks: "Uses confidential data and secrets in prompts.",
         containsSensitiveConcepts: true,
       });
     });

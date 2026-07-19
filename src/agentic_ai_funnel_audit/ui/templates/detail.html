@@ -2,12 +2,13 @@
 {% block content %}
   <h1>Entry {{ entry.idea_id }}</h1>
   <h4>{{ entry.payload.title }}</h4>
-  <p>{{ entry.payload.description }}</p>
+  <p>{{ entry.payload.problem_statement }}</p>
   <dl class="row">
-    <dt class="col-sm-3">Owner</dt><dd class="col-sm-9">{{ entry.payload.owner }}</dd>
-    <dt class="col-sm-3">Estimated Benefit</dt><dd class="col-sm-9">{{ entry.payload.estimated_benefit }}</dd>
-    <dt class="col-sm-3">Data Maturity</dt><dd class="col-sm-9">{{ entry.payload.data_maturity }}/5</dd>
-    <dt class="col-sm-3">Dependencies</dt><dd class="col-sm-9">{{ entry.payload.dependencies_count }}</dd>
+    <dt class="col-sm-3">Sponsor</dt><dd class="col-sm-9">{{ entry.payload.sponsor }}</dd>
+    <dt class="col-sm-3">Business Outcome</dt><dd class="col-sm-9">{{ entry.payload.business_outcome }}</dd>
+    <dt class="col-sm-3">Target Users</dt><dd class="col-sm-9">{{ entry.payload.target_users }}</dd>
+    <dt class="col-sm-3">Systems</dt><dd class="col-sm-9">{{ entry.payload.systems_involved | join(', ') }}</dd>
+    <dt class="col-sm-3">Required Data</dt><dd class="col-sm-9">{{ entry.payload.required_data_sources | join(', ') }}</dd>
     <dt class="col-sm-3">Created</dt><dd class="col-sm-9">{{ entry.created_at }}</dd>
   </dl>
 
@@ -76,6 +77,40 @@
           <p class="text-muted small mb-0">
             Execution: {{ ar.execution_mode }} | Model: {{ ar.model_name if ar.model_enabled else 'Heuristic fallback (model disabled)' }}
           </p>
+
+          {% if ar.report %}
+            <hr>
+            <h6>Investment Recommendation</h6>
+            <p class="mb-1"><strong>{{ ar.report.investment_recommendation.route }}</strong> &mdash; {{ ar.report.investment_recommendation.summary }}</p>
+            <p class="small text-muted mb-2">Estimated investment band: {{ ar.report.investment_recommendation.estimated_investment_band }}</p>
+            <p class="mb-3">Priority investments: {{ ar.report.investment_recommendation.priority_investments | join(', ') }}</p>
+
+            <h6>Evidence Used</h6>
+            <div class="accordion" id="evidenceAccordion">
+              {% for agent_name, evidence_items in ar.report.evidence_by_agent.items() %}
+                <div class="accordion-item">
+                  <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#evidence{{ loop.index }}">
+                      {{ agent_name }} &mdash; {{ evidence_items | length }} evidence item(s)
+                    </button>
+                  </h2>
+                  <div id="evidence{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#evidenceAccordion">
+                    <div class="accordion-body">
+                      {% if evidence_items %}
+                        <ul class="mb-0">
+                          {% for item in evidence_items %}
+                            <li><strong>{{ item.title }}</strong>: {{ item.excerpt }}</li>
+                          {% endfor %}
+                        </ul>
+                      {% else %}
+                        <p class="mb-0 text-muted">No KB evidence retrieved for this agent.</p>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
         </div>
       </div>
     {% endif %}

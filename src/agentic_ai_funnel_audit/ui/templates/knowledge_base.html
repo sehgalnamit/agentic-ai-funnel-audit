@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1>Demo Knowledge Base</h1>
+      <p class="text-muted mb-0">These sample documents are what the subagents retrieve in the working demo.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="{{ url_for('intake') }}">Back to intake</a>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header"><strong>Idea intake template</strong></div>
+    <div class="card-body">
+      <pre class="mb-0" style="white-space: pre-wrap;">{{ intake_template }}</pre>
+    </div>
+  </div>
+
+  {% for domain, documents in grouped_documents.items() %}
+    <div class="card mb-4">
+      <div class="card-header text-capitalize"><strong>{{ domain }} agent KB</strong></div>
+      <div class="card-body">
+        {% for doc in documents %}
+          <div class="mb-4">
+            <h5>{{ doc.title }}</h5>
+            <p class="small text-muted mb-2">{{ doc.id }}</p>
+            <p><strong>Metadata:</strong> {{ doc.metadata }}</p>
+            <pre class="mb-0" style="white-space: pre-wrap;">{{ doc.content }}</pre>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+{% endblock %}

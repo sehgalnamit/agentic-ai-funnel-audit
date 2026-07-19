@@ -5,11 +5,14 @@ from statistics import mean
 
 from .agents import (
     AgentEvaluation,
+    StrategicAlignmentAgent,
+    DataReadinessAgent,
     InternalOperationsAgent,
     MarketSignalAgent,
     DeliberativeSandboxAgent,
 )
 from .governance import ModelArmor, SafetyAgent
+from .knowledge_base import load_demo_knowledge_base
 from .modeling import ModelEvaluator
 
 
@@ -31,26 +34,36 @@ class AuditResult:
 
 class AuditPipeline:
     def __init__(self):
+        self.strategic_agent = StrategicAlignmentAgent()
+        self.data_agent = DataReadinessAgent()
         self.internal_agent = InternalOperationsAgent()
         self.market_agent = MarketSignalAgent()
         self.deliberative_agent = DeliberativeSandboxAgent()
         self.safety_agent = SafetyAgent()
         self.model_armor = ModelArmor()
         self.model_evaluator = ModelEvaluator()
+        self.knowledge_base = load_demo_knowledge_base()
 
     def run(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AuditResult:
+        runtime_context = dict(context)
+        runtime_context.setdefault("knowledge_base", self.knowledge_base)
         governance = self.model_armor.inspect(idea)
-        safety = self.safety_agent.evaluate(idea, context)
-        internal = self.internal_agent.evaluate(idea, context)
-        market = self.market_agent.evaluate(idea, context)
-        model_insights = self._build_model_insights(idea, context)
+        strategic = self.strategic_agent.evaluate(idea, runtime_context)
+        data = self.data_agent.evaluate(idea, runtime_context)
+        runtime_context["data_readiness_score"] = data.score
+        safety = self.safety_agent.evaluate(idea, runtime_context)
+        internal = self.internal_agent.evaluate(idea, runtime_context)
+        market = self.market_agent.evaluate(idea, runtime_context)
+        model_insights = self._build_model_insights(idea, runtime_context)
         internal, market = self._apply_model_insights(internal, market, model_insights)
-        deliberative = self.deliberative_agent.evaluate([internal, market, safety])
+        deliberative = self.deliberative_agent.evaluate([strategic, data, internal, market, safety])
 
-        iso_scores = self._score_iso_domains(idea, internal, market, safety)
-        policy = self._resolve_policy(context)
-        feedback_adjustment = self._compute_feedback_adjustment(idea, context)
+        iso_scores = self._score_iso_domains(strategic, data, internal, market, safety)
+        policy = self._resolve_policy(runtime_context)
+        feedback_adjustment = self._compute_feedback_adjustment(idea, runtime_context)
         weighted_score = self._apply_policy_weights(
+            strategic=strategic,
+            data=data,
             internal=internal,
             market=market,
             safety=safety,
@@ -66,12 +79,35 @@ class AuditPipeline:
             and iso_scores["Compliance Readiness"] >= 3
             and governance["is_safe"]
         )
-        report = self._build_report(idea, context, iso_scores, final_score, pass_gate, governance, safety, model_insights)
-        artifact = self._build_audit_artifact(idea, context, iso_scores, final_score, pass_gate, governance, policy, report, model_insights)
+        report = self._build_report(
+            idea,
+            runtime_context,
+            strategic,
+            data,
+            internal,
+            market,
+            safety,
+            iso_scores,
+            final_score,
+            pass_gate,
+            governance,
+            model_insights,
+        )
+        artifact = self._build_audit_artifact(
+            idea,
+            runtime_context,
+            iso_scores,
+            final_score,
+            pass_gate,
+            governance,
+            policy,
+            report,
+            model_insights,
+        )
 
         return AuditResult(
             idea_id=idea.get("id", "unknown"),
-            evaluations=[internal, market, safety],
+            evaluations=[strategic, data, internal, market, safety],
             deliberation=deliberative,
             iso_scores=iso_scores,
             final_score=final_score,
@@ -86,13 +122,14 @@ class AuditPipeline:
 
     def _score_iso_domains(
         self,
-        idea: Dict[str, Any],
+        strategic: AgentEvaluation,
+        data: AgentEvaluation,
         internal: AgentEvaluation,
         market: AgentEvaluation,
         safety: AgentEvaluation,
     ) -> Dict[str, int]:
-        strategic_alignment = min(5, max(1, idea.get("strategic_fit", 3)))
-        constraint_fit = min(5, max(1, round((internal.score + market.score) / 2)))
+        strategic_alignment = min(5, max(1, strategic.score))
+        constraint_fit = min(5, max(1, round((data.score + internal.score + market.score) / 3)))
         technical_feasibility = min(5, max(1, internal.score))
         compliance_readiness = min(5, max(1, safety.score))
 
@@ -110,11 +147,19 @@ class AuditPipeline:
         policy = context.get("policy") or {}
         return {
             "approval_threshold": policy.get("approval_threshold", 3),
-            "weights": policy.get("weights") or {"operational": 0.35, "market": 0.25, "governance": 0.4},
+            "weights": policy.get("weights") or {
+                "strategic": 0.2,
+                "data": 0.2,
+                "operational": 0.2,
+                "market": 0.15,
+                "governance": 0.25,
+            },
         }
 
     def _apply_policy_weights(
         self,
+        strategic: AgentEvaluation,
+        data: AgentEvaluation,
         internal: AgentEvaluation,
         market: AgentEvaluation,
         safety: AgentEvaluation,
@@ -122,18 +167,23 @@ class AuditPipeline:
         policy: Dict[str, Any],
     ) -> float:
         weights = policy.get("weights", {})
-        operational_weight = weights.get("operational", 0.35)
-        market_weight = weights.get("market", 0.25)
-        governance_weight = weights.get("governance", 0.4)
+        has_custom_weights = bool(weights)
+        strategic_weight = weights.get("strategic", 0.0 if has_custom_weights else 0.2)
+        data_weight = weights.get("data", 0.0 if has_custom_weights else 0.2)
+        operational_weight = weights.get("operational", 0.2 if not has_custom_weights else 0.0)
+        market_weight = weights.get("market", 0.15 if not has_custom_weights else 0.0)
+        governance_weight = weights.get("governance", 0.25 if not has_custom_weights else 0.0)
         deliberative_weight = 0.1
 
         weighted_sum = (
-            internal.score * operational_weight
+            strategic.score * strategic_weight
+            + data.score * data_weight
+            + internal.score * operational_weight
             + market.score * market_weight
             + safety.score * governance_weight
             + deliberative.score * deliberative_weight
         )
-        total_weight = operational_weight + market_weight + governance_weight + deliberative_weight
+        total_weight = strategic_weight + data_weight + operational_weight + market_weight + governance_weight + deliberative_weight
         return weighted_sum / total_weight
 
     def _compute_feedback_adjustment(self, idea: Dict[str, Any], context: Dict[str, Any]) -> int:
@@ -161,9 +211,11 @@ class AuditPipeline:
         if not self.model_evaluator.is_enabled():
             return {}
 
+        safe_context = {key: value for key, value in context.items() if key != "knowledge_base"}
+
         return {
-            "operational": self.model_evaluator.evaluate(idea, context, "operational"),
-            "market": self.model_evaluator.evaluate(idea, context, "market"),
+            "operational": self.model_evaluator.evaluate(idea, safe_context, "operational"),
+            "market": self.model_evaluator.evaluate(idea, safe_context, "market"),
         }
 
     def _apply_model_insights(
@@ -194,14 +246,19 @@ class AuditPipeline:
         self,
         idea: Dict[str, Any],
         context: Dict[str, Any],
+        strategic: AgentEvaluation,
+        data: AgentEvaluation,
+        internal: AgentEvaluation,
+        market: AgentEvaluation,
+        safety: AgentEvaluation,
         iso_scores: Dict[str, int],
         final_score: int,
         pass_gate: bool,
         governance: Dict[str, Any],
-        safety: AgentEvaluation,
         model_insights: Dict[str, Any],
     ) -> Dict[str, Any]:
         recommended_action = "Proceed with a controlled pilot" if pass_gate else "Rework the proposal before funding"
+        investment = self._build_investment_recommendation(strategic, data, internal, market, pass_gate)
         report = {
             "executive_summary": (
                 f"{idea.get('id', 'idea')} received a {final_score}/5 score and {'passed' if pass_gate else 'did not pass'} the review gate."
@@ -210,10 +267,18 @@ class AuditPipeline:
             "iso_scores": iso_scores,
             "governance_findings": governance.get("findings", []),
             "safety_status": safety.rationale,
+            "investment_recommendation": investment,
+            "evidence_by_agent": {
+                strategic.name: strategic.details.get("evidence", []),
+                data.name: data.details.get("evidence", []),
+                internal.name: internal.details.get("evidence", []),
+                market.name: market.details.get("evidence", []),
+                safety.name: safety.details.get("evidence", []),
+            },
             "context_sources": [
                 key for key in ["service_telemetry", "incident_history", "backlog_health", "architecture_metadata"]
                 if key in context
-            ],
+            ] + ["knowledge_base"],
         }
 
         if model_insights:
@@ -227,6 +292,53 @@ class AuditPipeline:
 
         return report
 
+    def _build_investment_recommendation(
+        self,
+        strategic: AgentEvaluation,
+        data: AgentEvaluation,
+        internal: AgentEvaluation,
+        market: AgentEvaluation,
+        pass_gate: bool,
+    ) -> Dict[str, Any]:
+        if pass_gate:
+            return {
+                "route": "fund_pilot_now",
+                "summary": "Idea has enough current readiness to proceed to a controlled pilot.",
+                "priority_investments": ["pilot delivery", "measurement", "governance controls"],
+                "estimated_investment_band": "medium",
+            }
+
+        if strategic.score >= 4 and data.score <= 2:
+            return {
+                "route": "fund_foundation_first",
+                "summary": "Idea is strategically strong but blocked by data readiness. Invest in data foundations before pilot funding.",
+                "priority_investments": ["data integration", "data quality", "ownership and lineage"],
+                "estimated_investment_band": "medium-high",
+            }
+
+        if strategic.score >= 4 and internal.score <= 2:
+            return {
+                "route": "incubate_architecture",
+                "summary": "Idea is valuable but technical complexity is high. Resolve architecture and delivery constraints before launch.",
+                "priority_investments": ["platform integration", "workflow redesign", "delivery capacity"],
+                "estimated_investment_band": "medium-high",
+            }
+
+        if market.score <= 2:
+            return {
+                "route": "retest_market_case",
+                "summary": "Current macro and micro trend evidence is weak. Revalidate market demand before funding build work.",
+                "priority_investments": ["customer discovery", "competitive analysis", "value hypothesis refinement"],
+                "estimated_investment_band": "low-medium",
+            }
+
+        return {
+            "route": "rework_then_resubmit",
+            "summary": "The idea needs better evidence or prerequisites before funding.",
+            "priority_investments": ["business case refinement", "capability gap closure"],
+            "estimated_investment_band": "low",
+        }
+
     def _build_audit_artifact(
         self,
         idea: Dict[str, Any],
@@ -239,9 +351,14 @@ class AuditPipeline:
         report: Dict[str, Any],
         model_insights: Dict[str, Any],
     ) -> Dict[str, Any]:
+        safe_context = {
+            key: value
+            for key, value in context.items()
+            if key != "knowledge_base"
+        }
         return {
             "idea": idea,
-            "context": context,
+            "context": safe_context,
             "iso_scores": iso_scores,
             "final_score": final_score,
             "pass_gate": pass_gate,

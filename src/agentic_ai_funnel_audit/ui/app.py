@@ -6,27 +6,26 @@ from pathlib import Path
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 # Make the package importable when running from the repo root
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "src"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SRC = REPO_ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from agentic_ai_funnel_audit.storage import AuditStore
+from agentic_ai_funnel_audit.knowledge_base import load_demo_knowledge_base
 from agentic_ai_funnel_audit.pipeline import AuditPipeline
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
 store = AuditStore()
 pipeline = AuditPipeline()
+demo_kb = load_demo_knowledge_base()
 
 
-def _to_int(value, default):
-    try:
-        if value is None or value == "":
-            return default
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+def _csv_list(value):
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 @app.route("/")
@@ -38,55 +37,79 @@ def index():
 def intake():
     if request.method == "POST":
         idea_id = request.form.get("idea_id") or str(uuid.uuid4())
-        dependencies_count = _to_int(request.form.get("dependencies_count"), 1)
-        data_maturity = _to_int(request.form.get("data_maturity"), 3)
-        workflow_overlap = _to_int(request.form.get("workflow_overlap"), 0)
-        trend_score = _to_int(request.form.get("trend_score"), 3)
-        competitor_signal = _to_int(request.form.get("competitor_signal"), 3)
-        market_risk = _to_int(request.form.get("market_risk"), 3)
-        strategic_fit = _to_int(request.form.get("strategic_fit"), 3)
+        title = request.form.get("title")
+        problem_statement = request.form.get("problem_statement")
+        business_outcome = request.form.get("business_outcome")
+        sponsor = request.form.get("sponsor")
+        target_users = request.form.get("target_users")
+        kpi_target = request.form.get("estimated_benefit")
+        current_process = request.form.get("current_process")
+        systems_involved = _csv_list(request.form.get("systems_involved"))
+        required_data_sources = _csv_list(request.form.get("required_data_sources"))
+        known_dependencies = _csv_list(request.form.get("known_dependencies")) or systems_involved
+        geographic_scope = request.form.get("geographic_scope")
+        delivery_timeline = request.form.get("delivery_timeline")
+        ai_pattern = request.form.get("ai_pattern")
+        human_review = request.form.get("human_review")
+        known_risks = request.form.get("known_risks")
+
+        workflow_overlap = min(3, max(0, len(systems_involved) - 1))
+        telemetry_uptime = 99.8 if len(systems_involved) <= 2 else 98.9
+        slo_breaches = 0 if len(systems_involved) <= 2 else 1
+        delivery_velocity = 4 if len(required_data_sources) <= 2 else 2
+        legacy_systems = sum(1 for item in systems_involved if "legacy" in item.lower() or "support" in item.lower())
 
         payload = {
-            "title": request.form.get("title"),
-            "description": request.form.get("description"),
-            "owner": request.form.get("owner"),
-            "estimated_benefit": request.form.get("estimated_benefit"),
-            "dependencies_count": dependencies_count,
-            "data_maturity": data_maturity,
-            "workflow_overlap": workflow_overlap,
-            "trend_score": trend_score,
-            "competitor_signal": competitor_signal,
-            "market_risk": market_risk,
-            "strategic_fit": strategic_fit,
+            "title": title,
+            "problem_statement": problem_statement,
+            "business_outcome": business_outcome,
+            "sponsor": sponsor,
+            "target_users": target_users,
+            "estimated_benefit": kpi_target,
+            "current_process": current_process,
+            "systems_involved": systems_involved,
+            "required_data_sources": required_data_sources,
+            "known_dependencies": known_dependencies,
+            "geographic_scope": geographic_scope,
+            "delivery_timeline": delivery_timeline,
+            "ai_pattern": ai_pattern,
+            "human_review": human_review,
+            "known_risks": known_risks,
         }
 
-        description = payload["description"] or ""
+        description = "\n".join(
+            part for part in [problem_statement, business_outcome, current_process, known_risks] if part
+        ) or title or ""
         contains_sensitive_concepts = bool(
             request.form.get("contains_sensitive_concepts")
             or any(token in description.lower() for token in ["api key", "password", "private key", "confidential"])
         )
 
-        # Build an idea dict the pipeline understands
         idea = {
             "id": idea_id,
-            "description": payload["description"] or payload["title"],
-            "dependencies": [f"dep-{i+1}" for i in range(max(0, dependencies_count))],
+            "title": title,
+            "description": description,
+            "business_outcome": business_outcome,
+            "target_users": target_users,
+            "current_process": current_process,
+            "systems_involved": systems_involved,
+            "required_data_sources": required_data_sources,
+            "dependencies": known_dependencies,
             "workflow_overlap": workflow_overlap,
-            "trend_score": trend_score,
-            "market_risk": market_risk,
-            "strategic_fit": strategic_fit,
+            "kpi_target": kpi_target,
+            "sponsor": sponsor,
             "contains_sensitive_concepts": contains_sensitive_concepts,
         }
         context = {
-            "data_maturity": data_maturity,
-            "competitor_signal": competitor_signal,
+            "geography": geographic_scope,
             "service_telemetry": {
-                "uptime": 99.8 if data_maturity >= 3 else 98.5,
-                "slo_breach_count": 0 if workflow_overlap <= 1 else 2,
+                "uptime": telemetry_uptime,
+                "slo_breach_count": slo_breaches,
             },
-            "incident_history": {"severity": 2 if workflow_overlap <= 1 else 4},
-            "backlog_health": {"delivery_velocity": 4 if data_maturity >= 3 else 2},
-            "architecture_metadata": {"legacy_systems": max(1, dependencies_count // 2)},
+            "incident_history": {"severity": 2 if workflow_overlap <= 1 else 3},
+            "backlog_health": {"delivery_velocity": delivery_velocity},
+            "architecture_metadata": {"legacy_systems": legacy_systems, "integration_count": len(systems_involved)},
+            "knowledge_base": demo_kb,
         }
         try:
             result = pipeline.run(idea, context)
@@ -109,7 +132,8 @@ def intake():
                     "rationale": result.safety.rationale,
                 },
                 "governance": result.governance,
-                "execution_mode": "Local root agent + subagents",
+                "report": result.report,
+                "execution_mode": "Local root agent + KB-backed subagents",
                 "model_enabled": pipeline.model_evaluator.is_enabled(),
                 "model_name": pipeline.model_evaluator.model_name,
             }
@@ -119,6 +143,17 @@ def intake():
         flash(f"Saved intake: {entry.idea_id}")
         return redirect(url_for("entry_detail", idea_id=entry.idea_id))
     return render_template("intake.html")
+
+
+@app.route("/knowledge-base")
+def knowledge_base():
+    template_path = REPO_ROOT / "demo_kb" / "templates" / "idea-intake-template.md"
+    intake_template = template_path.read_text(encoding="utf-8")
+    return render_template(
+        "knowledge_base.html",
+        grouped_documents=demo_kb.grouped_documents(),
+        intake_template=intake_template,
+    )
 
 
 @app.route("/dashboard")

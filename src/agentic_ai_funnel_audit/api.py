@@ -20,7 +20,15 @@ calibrator = FeedbackLoopCalibrator(outcome_store)
 
 class IdeaRequest(BaseModel):
     id: str
+    title: str | None = None
     description: str
+    business_outcome: str | None = None
+    target_users: list[str] = []
+    current_process: str | None = None
+    systems_involved: list[str] = []
+    required_data_sources: list[str] = []
+    kpi_target: str | None = None
+    sponsor: str | None = None
     dependencies: list[str] = []
     workflow_overlap: int = 0
     trend_score: int = 3
@@ -34,6 +42,8 @@ class IdeaContext(BaseModel):
 
     data_maturity: int = 3
     competitor_signal: int = 3
+    geography: str | None = None
+    industry: str | None = None
     service_telemetry: dict[str, Any] | None = None
     incident_history: dict[str, Any] | None = None
     backlog_health: dict[str, Any] | None = None

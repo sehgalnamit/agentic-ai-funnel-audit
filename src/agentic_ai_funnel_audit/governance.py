@@ -2,6 +2,7 @@ import re
 from typing import Dict, Any, List
 
 from .agents import Agent, AgentEvaluation
+from .knowledge_base import DemoKnowledgeBase
 
 
 def _build_sensitive_patterns() -> List[re.Pattern]:
@@ -20,10 +21,13 @@ class SafetyAgent(Agent):
     def evaluate(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AgentEvaluation:
         description = idea.get("description", "")
         flags = []
+        kb = context.get("knowledge_base") if isinstance(context.get("knowledge_base"), DemoKnowledgeBase) else None
 
         for pattern in self.sensitive_patterns:
             if pattern.search(description):
                 flags.append(pattern.pattern)
+
+        hits = kb.search("governance", description, limit=2) if kb and description else []
 
         score = 5
         rationale = "No sensitive content detected."
@@ -33,6 +37,8 @@ class SafetyAgent(Agent):
                 "Potential sensitive or proprietary content detected in idea description. "
                 f"Patterns: {flags}."
             )
+        elif hits:
+            rationale = "Governance policies retrieved with no immediate sensitive-content violation."
 
         return AgentEvaluation(
             name=self.name,
@@ -41,6 +47,7 @@ class SafetyAgent(Agent):
             details={
                 "description_length": len(description),
                 "flags": flags,
+                "evidence": [hit.to_dict() for hit in hits],
             },
         )
 

@@ -185,3 +185,36 @@ def test_cli_exports_audit_report(tmp_path):
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["idea_id"] == "idea-cli"
     assert payload["report"]["recommended_action"]
+
+
+def test_pipeline_derives_scores_from_demo_kb_without_manual_self_scores():
+    pipeline = AuditPipeline()
+
+    idea = {
+        "id": "idea-kb-001",
+        "title": "Customer churn prevention orchestrator",
+        "description": "Improve customer retention with governed AI workflows across CRM, billing, support, and product telemetry.",
+        "business_outcome": "Reduce churn and improve service productivity.",
+        "target_users": "customer success, support leadership",
+        "systems_involved": ["crm", "billing", "support", "workflow-engine"],
+        "required_data_sources": ["crm", "billing", "support", "product telemetry"],
+        "dependencies": ["data-platform", "workflow-engine"],
+        "workflow_overlap": 2,
+    }
+    context = {
+        "service_telemetry": {"uptime": 99.3, "slo_breach_count": 0},
+        "incident_history": {"severity": 2},
+        "backlog_health": {"delivery_velocity": 3},
+        "architecture_metadata": {"legacy_systems": 1},
+    }
+
+    result = pipeline.run(idea, context)
+
+    assert result.iso_scores["Strategic Alignment"] >= 4
+    assert result.report["investment_recommendation"]["route"] in {
+        "fund_pilot_now",
+        "fund_foundation_first",
+        "incubate_architecture",
+    }
+    assert result.report["evidence_by_agent"]["Strategic Alignment Agent"]
+    assert result.report["evidence_by_agent"]["Data Readiness Agent"]
