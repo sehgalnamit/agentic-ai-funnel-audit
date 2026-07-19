@@ -10,6 +10,7 @@ Requires-Dist: fastapi
 Requires-Dist: uvicorn
 Requires-Dist: pydantic
 Requires-Dist: flask
+Requires-Dist: groq
 
 ﻿# agentic-ai-funnel-audit
 
@@ -140,6 +141,25 @@ flowchart LR
     Debate --> Audit[AuditResult]
 ```
 
+## Scoring semantics and gate policy
+
+All scores in this project use the same direction: **higher is better** on a 1-5 scale.
+
+- **Strategic Alignment**: direct mapping from `strategic_fit`.
+- **Constraint Fit**: average readiness from internal and market perspectives.
+- **Technical Feasibility**: direct mapping from internal operational readiness.
+- **Compliance Readiness**: direct mapping from safety score.
+
+Gate decision is intentionally stricter than an overall weighted average. An idea passes only when all of the following are true:
+- final score is at or above `approval_threshold` (default: 3)
+- Strategic Alignment >= 3
+- Constraint Fit >= 3
+- Technical Feasibility >= 3
+- Compliance Readiness >= 3
+- governance guardrail returns safe
+
+This avoids a scenario where one weak domain is hidden by strong scores in other domains.
+
 ## What this repo contains
 
 - `src/agentic_ai_funnel_audit/agents.py` — operational, market, and deliberative agent logic
@@ -186,6 +206,61 @@ If you want model-driven scoring, set environment variables before running the s
 - `OPENAI_API_KEY` - your OpenAI credential
 - `AGENTIC_USE_MODEL=true` - enable the optional scoring model
 - `AGENTIC_MODEL_NAME` - optional model name, defaults to `gpt-4o-mini`
+
+### Free Groq key for demo use
+
+If you want a no-cost demo model, use Groq's free tier:
+
+1. Go to [console.groq.com](https://console.groq.com)
+2. Sign in or create an account
+3. Open the API keys page in the console
+4. Create a new key and copy it once
+5. Set it in PowerShell before starting the app:
+
+```powershell
+$env:GROQ_API_KEY = "your-groq-key"
+python -m agentic_ai_funnel_audit.ui.app
+```
+
+Suggested demo models:
+- `llama-3.3-70b-versatile`
+- `llama-3.1-8b-instant`
+
+You do not need `OPENAI_API_KEY` for the demo if `GROQ_API_KEY` is set.
+
+### Test Cases you can use
+
+Use these as sample intakes in the Flask UI to show different gate outcomes and agent reasoning:
+
+1. **Balanced readiness (expected PASS)**
+  - Title: `Real-time analytics hub`
+  - Description: `Build a real-time analytics hub for enterprise workflow signals.`
+  - Suggested values: strategic_fit=4, data_maturity=4, dependencies_count=1, workflow_overlap=0, trend_score=4, competitor_signal=4, market_risk=1
+  - Why it works: keeps all four ISO domains >= 3 and should pass the gate.
+
+2. **High strategic fit but low feasibility (expected FAIL)**
+  - Title: `Strategic transformation with legacy dependencies`
+  - Description: `Strategic initiative with severe delivery constraints.`
+  - Suggested values: strategic_fit=5, data_maturity=1, dependencies_count=4, workflow_overlap=3, trend_score=3, competitor_signal=2, market_risk=4
+  - Why it works: demonstrates that strong strategic alignment cannot override low constraint fit and technical feasibility.
+
+3. **Low strategic fit (expected FAIL)**
+  - Title: `Experimental capability with weak alignment`
+  - Description: `Pilot a capability that does not map clearly to current business priorities.`
+  - Suggested values: strategic_fit=1, data_maturity=3, dependencies_count=1, workflow_overlap=0, trend_score=3, competitor_signal=3, market_risk=2
+  - Why it works: fails due to Strategic Alignment threshold.
+
+4. **Sensitive content safety failure (expected FAIL)**
+  - Title: `Automation over confidential material`
+  - Description: `Use password and api key values from confidential logs to speed up troubleshooting.`
+  - Suggested values: strategic_fit=4, data_maturity=4, dependencies_count=1, workflow_overlap=0, trend_score=4, competitor_signal=3, market_risk=2
+  - Why it works: safety/compliance and governance guardrails should block approval.
+
+5. **Moderate value, moderate risk (borderline by policy)**
+  - Title: `Incident trend summarizer`
+  - Description: `Summarize weekly incident themes for engineering leadership.`
+  - Suggested values: strategic_fit=3, data_maturity=3, dependencies_count=2, workflow_overlap=1, trend_score=3, competitor_signal=3, market_risk=2
+  - Why it works: useful to demonstrate policy threshold tuning via `approval_threshold` and weighting.
 
 ## Manager UI (Intake + Gate)
 
