@@ -71,7 +71,7 @@ class KnowledgeSyncPlanner:
 
     def describe(self) -> dict[str, Any]:
         return {
-            "ingestion_mode": "async_snapshots",
+            "ingestion_mode": "async_source_adapters_and_snapshots",
             "domains": self.domain_contracts,
         }
 

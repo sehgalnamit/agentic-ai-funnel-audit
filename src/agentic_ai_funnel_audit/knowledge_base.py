@@ -7,6 +7,8 @@ from pathlib import Path
 import re
 from typing import Any, Iterable
 
+from .observability import observability
+
 
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9\-]{1,}", re.IGNORECASE)
 
@@ -122,24 +124,31 @@ class DemoKnowledgeBase:
         return cls(documents)
 
     def search(self, domain: str, query: str, limit: int = 3) -> list[KnowledgeHit]:
-        domain_docs = [doc for doc in self.documents if doc.domain == domain]
-        query_tokens = _tokenize(query)
-        hits: list[KnowledgeHit] = []
-        for document in domain_docs:
-            searchable = " ".join(
-                [document.title, document.content, " ".join(_flatten_metadata(document.metadata))]
-            )
-            doc_tokens = _tokenize(searchable)
-            overlap = query_tokens & doc_tokens
-            if not overlap:
-                continue
-            metadata_score = sum(
-                value for key, value in document.metadata.items() if key.endswith("_score") and isinstance(value, int)
-            )
-            score = float(len(overlap)) + (metadata_score / 10.0)
-            hits.append(KnowledgeHit(document=document, score=score, excerpt=_build_excerpt(document.content, overlap)))
-        hits.sort(key=lambda item: item.score, reverse=True)
-        return hits[:limit]
+        with observability.timed_span(
+            "audit.retrieval.search",
+            {
+                "kb.domain": domain,
+                "kb.limit": limit,
+            },
+        ):
+            domain_docs = [doc for doc in self.documents if doc.domain == domain]
+            query_tokens = _tokenize(query)
+            hits: list[KnowledgeHit] = []
+            for document in domain_docs:
+                searchable = " ".join(
+                    [document.title, document.content, " ".join(_flatten_metadata(document.metadata))]
+                )
+                doc_tokens = _tokenize(searchable)
+                overlap = query_tokens & doc_tokens
+                if not overlap:
+                    continue
+                metadata_score = sum(
+                    value for key, value in document.metadata.items() if key.endswith("_score") and isinstance(value, int)
+                )
+                score = float(len(overlap)) + (metadata_score / 10.0)
+                hits.append(KnowledgeHit(document=document, score=score, excerpt=_build_excerpt(document.content, overlap)))
+            hits.sort(key=lambda item: item.score, reverse=True)
+            return hits[:limit]
 
     def grouped_documents(self) -> dict[str, list[KnowledgeDocument]]:
         grouped: dict[str, list[KnowledgeDocument]] = {}

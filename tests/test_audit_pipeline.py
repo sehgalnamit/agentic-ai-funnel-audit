@@ -268,3 +268,5 @@ def test_pipeline_adds_confidence_and_handoff_guidance():
     assert "agent_confidence" in result.report
     assert result.report["human_handoff"]["required"] is True
     assert result.report["human_handoff"]["priority"] in {"medium", "high"}
+    assert "cost_metrics" in result.report
+    assert result.report["cost_metrics"]["estimated_execution_cost_usd"] > 0

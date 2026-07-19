@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List
 
 from statistics import mean
+import time
 
 from .agents import (
     AgentEvaluation,
@@ -16,6 +17,7 @@ from .agents import (
 from .governance import ModelArmor, SafetyAgent
 from .knowledge_base import load_knowledge_base
 from .modeling import ModelEvaluator
+from .observability import observability
 
 
 @dataclass
@@ -49,88 +51,97 @@ class AuditPipeline:
         self.knowledge_base = load_knowledge_base()
 
     def run(self, idea: Dict[str, Any], context: Dict[str, Any]) -> AuditResult:
-        runtime_context = dict(context)
-        runtime_context.setdefault("knowledge_base", self.knowledge_base)
-        governance = self.model_armor.inspect(idea)
-        strategic = self.strategic_agent.evaluate(idea, runtime_context)
-        data = self.data_agent.evaluate(idea, runtime_context)
-        runtime_context["data_readiness_score"] = data.score
-        architecture = self.architecture_agent.evaluate(idea, runtime_context)
-        runtime_context["architecture_readiness_score"] = architecture.score
-        delivery = self.delivery_agent.evaluate(idea, runtime_context)
-        runtime_context["delivery_capacity_score"] = delivery.score
-        safety = self.safety_agent.evaluate(idea, runtime_context)
-        internal = self.internal_agent.evaluate(idea, runtime_context)
-        market = self.market_agent.evaluate(idea, runtime_context)
-        model_insights = self._build_model_insights(idea, runtime_context)
-        internal, market = self._apply_model_insights(internal, market, model_insights)
-        deliberative = self.deliberative_agent.evaluate([strategic, data, architecture, delivery, internal, market, safety])
+        with observability.timed_span(
+            "audit.pipeline.run",
+            {
+                "idea.id": idea.get("id", "unknown"),
+                "kb.mode": str(context.get("knowledge_base_mode", "runtime")),
+            },
+        ):
+            runtime_context = dict(context)
+            runtime_context.setdefault("knowledge_base", self.knowledge_base)
+            governance = self.model_armor.inspect(idea)
+            strategic = self._evaluate_agent("strategic", self.strategic_agent, idea, runtime_context)
+            data = self._evaluate_agent("data", self.data_agent, idea, runtime_context)
+            runtime_context["data_readiness_score"] = data.score
+            architecture = self._evaluate_agent("architecture", self.architecture_agent, idea, runtime_context)
+            runtime_context["architecture_readiness_score"] = architecture.score
+            delivery = self._evaluate_agent("delivery", self.delivery_agent, idea, runtime_context)
+            runtime_context["delivery_capacity_score"] = delivery.score
+            safety = self._evaluate_agent("safety", self.safety_agent, idea, runtime_context)
+            internal = self._evaluate_agent("internal", self.internal_agent, idea, runtime_context)
+            market = self._evaluate_agent("market", self.market_agent, idea, runtime_context)
+            model_insights = self._build_model_insights(idea, runtime_context)
+            internal, market = self._apply_model_insights(internal, market, model_insights)
+            deliberative = self.deliberative_agent.evaluate([strategic, data, architecture, delivery, internal, market, safety])
+            iso_scores = self._score_iso_domains(strategic, data, architecture, delivery, internal, market, safety)
+            policy = self._resolve_policy(runtime_context)
+            feedback_adjustment = self._compute_feedback_adjustment(idea, runtime_context)
+            weighted_score = self._apply_policy_weights(
+                strategic=strategic,
+                data=data,
+                architecture=architecture,
+                delivery=delivery,
+                internal=internal,
+                market=market,
+                safety=safety,
+                deliberative=deliberative,
+                policy=policy,
+            )
+            final_score = max(1, min(5, round(weighted_score + feedback_adjustment)))
+            pass_gate = (
+                final_score >= policy.get("approval_threshold", 3)
+                and iso_scores["Strategic Alignment"] >= 3
+                and iso_scores["Constraint Fit"] >= 3
+                and iso_scores["Technical Feasibility"] >= 3
+                and iso_scores["Compliance Readiness"] >= 3
+                and governance["is_safe"]
+            )
+            report = self._build_report(
+                idea,
+                runtime_context,
+                strategic,
+                data,
+                architecture,
+                delivery,
+                internal,
+                market,
+                safety,
+                iso_scores,
+                final_score,
+                pass_gate,
+                governance,
+                model_insights,
+            )
+            artifact = self._build_audit_artifact(
+                idea,
+                runtime_context,
+                iso_scores,
+                final_score,
+                pass_gate,
+                governance,
+                policy,
+                report,
+                model_insights,
+            )
 
-        iso_scores = self._score_iso_domains(strategic, data, architecture, delivery, internal, market, safety)
-        policy = self._resolve_policy(runtime_context)
-        feedback_adjustment = self._compute_feedback_adjustment(idea, runtime_context)
-        weighted_score = self._apply_policy_weights(
-            strategic=strategic,
-            data=data,
-            architecture=architecture,
-            delivery=delivery,
-            internal=internal,
-            market=market,
-            safety=safety,
-            deliberative=deliberative,
-            policy=policy,
-        )
-        final_score = max(1, min(5, round(weighted_score + feedback_adjustment)))
-        pass_gate = (
-            final_score >= policy.get("approval_threshold", 3)
-            and iso_scores["Strategic Alignment"] >= 3
-            and iso_scores["Constraint Fit"] >= 3
-            and iso_scores["Technical Feasibility"] >= 3
-            and iso_scores["Compliance Readiness"] >= 3
-            and governance["is_safe"]
-        )
-        report = self._build_report(
-            idea,
-            runtime_context,
-            strategic,
-            data,
-            architecture,
-            delivery,
-            internal,
-            market,
-            safety,
-            iso_scores,
-            final_score,
-            pass_gate,
-            governance,
-            model_insights,
-        )
-        artifact = self._build_audit_artifact(
-            idea,
-            runtime_context,
-            iso_scores,
-            final_score,
-            pass_gate,
-            governance,
-            policy,
-            report,
-            model_insights,
-        )
-
-        return AuditResult(
-            idea_id=idea.get("id", "unknown"),
-            evaluations=[strategic, data, architecture, delivery, internal, market, safety],
-            deliberation=deliberative,
-            iso_scores=iso_scores,
-            final_score=final_score,
-            pass_gate=pass_gate,
-            safety=safety,
-            governance=governance,
-            policy=policy,
-            feedback_adjustment=feedback_adjustment,
-            report=report,
-            artifact=artifact,
-        )
+            result = AuditResult(
+                idea_id=idea.get("id", "unknown"),
+                evaluations=[strategic, data, architecture, delivery, internal, market, safety],
+                deliberation=deliberative,
+                iso_scores=iso_scores,
+                final_score=final_score,
+                pass_gate=pass_gate,
+                safety=safety,
+                governance=governance,
+                policy=policy,
+                feedback_adjustment=feedback_adjustment,
+                report=report,
+                artifact=artifact,
+            )
+            self._record_result_metrics(result)
+            observability.record_run({"pass_gate": str(result.pass_gate).lower()})
+            return result
 
     def run_batch(self, ideas: List[Dict[str, Any]], shared_context: Dict[str, Any] | None = None) -> List[AuditResult]:
         base_context = shared_context or {}
@@ -248,6 +259,45 @@ class AuditPipeline:
             "operational": self.model_evaluator.evaluate(idea, safe_context, "operational"),
             "market": self.model_evaluator.evaluate(idea, safe_context, "market"),
         }
+
+    def _evaluate_agent(self, agent_key: str, agent: Any, idea: Dict[str, Any], context: Dict[str, Any]) -> AgentEvaluation:
+        with observability.timed_span("audit.subagent.evaluate", {"agent": agent_key}):
+            start = time.perf_counter()
+            evaluation = agent.evaluate(idea, context)
+            elapsed = round((time.perf_counter() - start) * 1000, 2)
+            evaluation.details["execution_ms"] = elapsed
+            return evaluation
+
+    def _record_result_metrics(self, result: AuditResult) -> None:
+        confidence = result.report.get("agent_confidence") or {}
+        for agent_name, payload in confidence.items():
+            observability.record_confidence(
+                float(payload.get("score", 0.0)),
+                {"agent": agent_name},
+            )
+
+        estimated_cost = self._estimate_execution_cost(result)
+        result.report["cost_metrics"] = {
+            "estimated_execution_cost_usd": estimated_cost,
+            "cost_model": "heuristic_v1",
+        }
+        observability.record_estimated_cost(
+            estimated_cost,
+            {
+                "idea_id": result.idea_id,
+                "pass_gate": str(result.pass_gate).lower(),
+            },
+        )
+
+    def _estimate_execution_cost(self, result: AuditResult) -> float:
+        total_evidence = sum(len(e.details.get("evidence") or []) for e in result.evaluations)
+        model_call_count = 0
+        for evaluation in result.evaluations:
+            if evaluation.details.get("model_operational"):
+                model_call_count += 1
+            if evaluation.details.get("model_market"):
+                model_call_count += 1
+        return round(0.003 + total_evidence * 0.0002 + model_call_count * 0.0015, 4)
 
     def _apply_model_insights(
         self,

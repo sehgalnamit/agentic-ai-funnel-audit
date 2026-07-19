@@ -14,7 +14,10 @@ from .storage import AuditStore
 from .connectors import OperationalDataFetcher
 from .knowledge_base import load_knowledge_base
 from .knowledge_ingestion import KnowledgeIngestionJob, KnowledgeSyncPlanner, SnapshotKnowledgeWriter
+from .source_adapters import build_default_adapters
 from .outcomes import OutcomeStore, OutcomeRecord, FeedbackLoopCalibrator
+from .durable_jobs import DurableJobStore
+from .observability import observability
 
 app = FastAPI(title="Agentic AI Funnel Audit")
 
@@ -26,6 +29,8 @@ calibrator = FeedbackLoopCalibrator(outcome_store)
 sync_planner = KnowledgeSyncPlanner()
 snapshot_writer = SnapshotKnowledgeWriter(root=(Path(__file__).resolve().parents[2] / "knowledge_snapshots"))
 batch_job_manager = BatchAuditJobManager(pipeline=pipeline, audit_store=audit_store)
+durable_job_store = DurableJobStore(Path(os.getenv("AGENTIC_JOB_STORE_DIR", "runtime_jobs")))
+source_adapters = build_default_adapters()
 
 
 class IdeaRequest(BaseModel):
@@ -100,6 +105,10 @@ class OutcomeRequest(BaseModel):
     lessons_learned: str = ""
 
 
+class KnowledgeSyncRequest(BaseModel):
+    source_types: list[str] = Field(default_factory=list)
+
+
 @app.get("/")
 def health():
     return {"status": "ok"}
@@ -107,56 +116,15 @@ def health():
 
 @app.post("/audit")
 def audit_idea(payload: AuditPayload):
-    idea = payload.idea.model_dump()
-    context_data = payload.context.model_dump() if payload.context else {}
-    runtime_context = dict(context_data)
-    runtime_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
-    result = pipeline.run(idea, runtime_context)
-    audit_store.save(idea_id=result.idea_id, payload={
-        "idea": idea,
-        "context": context_data,
-        "result": {
-            "final_score": result.final_score,
-            "pass_gate": result.pass_gate,
-            "iso_scores": result.iso_scores,
-            "governance": result.governance,
-            "policy": result.policy,
-            "feedback_adjustment": result.feedback_adjustment,
-            "report": result.report,
-            "artifact": result.artifact,
-        },
-    })
-
-    return {
-        "idea_id": result.idea_id,
-        "final_score": result.final_score,
-        "pass_gate": result.pass_gate,
-        "iso_scores": result.iso_scores,
-        "governance": result.governance,
-        "policy": result.policy,
-        "feedback_adjustment": result.feedback_adjustment,
-        "report": result.report,
-        "artifact": result.artifact,
-        "deliberation": {
-            "name": result.deliberation.name,
-            "score": result.deliberation.score,
-            "rationale": result.deliberation.rationale,
-        },
-    }
-
-
-@app.post("/audit/batch")
-def audit_batch(payload: BatchAuditPayload):
-    shared_context = payload.context.model_dump() if payload.context else {}
-    shared_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
-    ideas = [idea.model_dump() for idea in payload.ideas]
-    results = pipeline.run_batch(ideas, shared_context)
-
-    output = []
-    for result, idea in zip(results, ideas):
+    with observability.timed_span("audit.api.route", {"route": "/audit"}):
+        idea = payload.idea.model_dump()
+        context_data = payload.context.model_dump() if payload.context else {}
+        runtime_context = dict(context_data)
+        runtime_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
+        result = pipeline.run(idea, runtime_context)
         audit_store.save(idea_id=result.idea_id, payload={
             "idea": idea,
-            "context": {key: value for key, value in shared_context.items() if key != "knowledge_base"},
+            "context": context_data,
             "result": {
                 "final_score": result.final_score,
                 "pass_gate": result.pass_gate,
@@ -168,50 +136,105 @@ def audit_batch(payload: BatchAuditPayload):
                 "artifact": result.artifact,
             },
         })
-        output.append({
+
+        return {
             "idea_id": result.idea_id,
             "final_score": result.final_score,
             "pass_gate": result.pass_gate,
             "iso_scores": result.iso_scores,
+            "governance": result.governance,
+            "policy": result.policy,
+            "feedback_adjustment": result.feedback_adjustment,
             "report": result.report,
-        })
+            "artifact": result.artifact,
+            "deliberation": {
+                "name": result.deliberation.name,
+                "score": result.deliberation.score,
+                "rationale": result.deliberation.rationale,
+            },
+        }
 
-    return {
-        "count": len(output),
-        "results": output,
-    }
+
+@app.post("/audit/batch")
+def audit_batch(payload: BatchAuditPayload):
+    with observability.timed_span("audit.api.route", {"route": "/audit/batch", "count": len(payload.ideas)}):
+        shared_context = payload.context.model_dump() if payload.context else {}
+        shared_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
+        ideas = [idea.model_dump() for idea in payload.ideas]
+        results = pipeline.run_batch(ideas, shared_context)
+
+        output = []
+        for result, idea in zip(results, ideas):
+            audit_store.save(idea_id=result.idea_id, payload={
+                "idea": idea,
+                "context": {key: value for key, value in shared_context.items() if key != "knowledge_base"},
+                "result": {
+                    "final_score": result.final_score,
+                    "pass_gate": result.pass_gate,
+                    "iso_scores": result.iso_scores,
+                    "governance": result.governance,
+                    "policy": result.policy,
+                    "feedback_adjustment": result.feedback_adjustment,
+                    "report": result.report,
+                    "artifact": result.artifact,
+                },
+            })
+            output.append({
+                "idea_id": result.idea_id,
+                "final_score": result.final_score,
+                "pass_gate": result.pass_gate,
+                "iso_scores": result.iso_scores,
+                "report": result.report,
+            })
+
+        return {
+            "count": len(output),
+            "results": output,
+        }
 
 
 @app.post("/audit/batch/async")
 def audit_batch_async(payload: BatchAuditPayload):
-    shared_context = payload.context.model_dump() if payload.context else {}
-    backend = _resolve_async_backend(payload.async_backend)
+    with observability.timed_span("audit.api.route", {"route": "/audit/batch/async", "count": len(payload.ideas)}):
+        shared_context = payload.context.model_dump() if payload.context else {}
+        backend = _resolve_async_backend(payload.async_backend)
 
-    if backend == "pubsub":
-        envelope = {
-            "ideas": [idea.model_dump() for idea in payload.ideas],
-            "context": shared_context,
-            "knowledge_base_mode": payload.knowledge_base_mode or os.getenv("AGENTIC_KB_MODE", "demo"),
-        }
-        message_id = _publish_pubsub(envelope)
-        return {
-            "job_id": f"pubsub:{message_id}",
-            "status": "submitted",
-            "backend": "pubsub",
-            "count": len(payload.ideas),
-        }
+        if backend == "pubsub":
+            durable_job = durable_job_store.create_submitted(count=len(payload.ideas), backend="pubsub")
+            envelope = {
+                "job_id": durable_job.job_id,
+                "ideas": [idea.model_dump() for idea in payload.ideas],
+                "context": shared_context,
+                "knowledge_base_mode": payload.knowledge_base_mode or os.getenv("AGENTIC_KB_MODE", "demo"),
+            }
+            message_id = _publish_pubsub(envelope)
+            durable_job_store.mark_queued(durable_job.job_id, message_id)
+            return {
+                "job_id": durable_job.job_id,
+                "status": "submitted",
+                "backend": "pubsub",
+                "message_id": message_id,
+                "count": len(payload.ideas),
+            }
 
-    shared_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
-    ideas = [idea.model_dump() for idea in payload.ideas]
-    job = batch_job_manager.submit(ideas, shared_context)
-    response = job.to_dict()
-    response["backend"] = "local"
-    return response
+        shared_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
+        ideas = [idea.model_dump() for idea in payload.ideas]
+        job = batch_job_manager.submit(ideas, shared_context)
+        response = job.to_dict()
+        response["backend"] = "local"
+        return response
 
 
 @app.get("/audit/jobs/{job_id}")
 def get_audit_job(job_id: str):
     job = batch_job_manager.get(job_id)
+    if job:
+        return job.to_dict()
+
+    durable = durable_job_store.get(job_id)
+    if durable:
+        return durable.to_dict()
+
     if not job:
         raise HTTPException(status_code=404, detail="Audit job not found.")
     return job.to_dict()
@@ -251,6 +274,33 @@ def ingest_knowledge_snapshot(payload: KnowledgeIngestionRequest):
         "domain": payload.domain,
         "title": payload.title,
         "refresh_mode": payload.refresh_mode,
+    }
+
+
+@app.post("/knowledge-base/sync")
+def sync_knowledge_from_sources(payload: KnowledgeSyncRequest):
+    requested = {item.strip().lower() for item in payload.source_types if item.strip()}
+    accepted: list[dict[str, Any]] = []
+
+    for adapter in source_adapters:
+        if requested and adapter.source_type not in requested:
+            continue
+        jobs = adapter.build_jobs()
+        for job in jobs:
+            path = asyncio.run(snapshot_writer.ingest(job))
+            accepted.append(
+                {
+                    "source_type": adapter.source_type,
+                    "domain": job.domain,
+                    "title": job.title,
+                    "path": str(path),
+                }
+            )
+
+    return {
+        "status": "accepted",
+        "ingested_count": len(accepted),
+        "records": accepted,
     }
 
 

@@ -321,6 +321,7 @@ Available endpoints:
 - `POST /audit/{idea_id}/override` - apply an executive override to a saved audit
 - `GET /knowledge-base/status` - inspect domain ownership and refresh metadata for KB-backed agents
 - `POST /knowledge-base/ingest` - submit an asynchronous domain snapshot update for production-style KB maintenance
+- `POST /knowledge-base/sync` - ingest KB updates from configured enterprise source adapters (strategy docs, data catalog, CMDB, telemetry, CRM, market feeds)
 - `GET /dashboard` - HTML dashboard with audit history
 - `POST /outcomes` - record an outcome for a completed idea
 - `GET /outcomes` - list all recorded outcomes
@@ -334,6 +335,13 @@ If you want model-driven scoring, set environment variables before running the s
 - `AGENTIC_KB_MODE=demo|production` - choose the local markdown demo KB or production snapshot mode
 - `AGENTIC_ASYNC_BACKEND=local|pubsub` - choose local in-memory queue or Pub/Sub publish path for `POST /audit/batch/async`
 - `AGENTIC_PUBSUB_TOPIC=projects/<project>/topics/<topic>` - required only when `AGENTIC_ASYNC_BACKEND=pubsub`
+- `AGENTIC_PUBSUB_SUBSCRIPTION=projects/<project>/subscriptions/<subscription>` - required for the Pub/Sub worker service
+- `AGENTIC_JOB_STORE_DIR=runtime_jobs` - JSON-backed durable async job state store path
+- `AGENTIC_OTEL_ENABLED=true` - enable OpenTelemetry instrumentation
+- `AGENTIC_OTEL_EXPORTER_OTLP_ENDPOINT=https://<tenant>.live.dynatrace.com/api/v2/otlp` - Dynatrace OTLP endpoint
+- `AGENTIC_OTEL_EXPORTER_OTLP_HEADERS=Authorization=Api-Token <token>` - OTLP auth header
+- `AGENTIC_SERVICE_NAME=agentic-ai-funnel-audit` - trace/metric service identity
+- `AGENTIC_SOURCE_STRATEGY_DOCS`, `AGENTIC_SOURCE_DATA_CATALOG`, `AGENTIC_SOURCE_CMDB`, `AGENTIC_SOURCE_TELEMETRY`, `AGENTIC_SOURCE_CRM`, `AGENTIC_SOURCE_MARKET` - JSON feed locations for enterprise adapters (file path or HTTPS URL)
 
 ### Knowledge base modes
 
@@ -411,6 +419,70 @@ Deploy a dedicated worker service (Cloud Run, GKE, or VM) subscribed to `agentic
 5. optionally updates an external job status store
 
 This keeps API latency low and isolates compute-heavy scoring from request handling.
+
+Run worker locally:
+
+```bash
+python -m agentic_ai_funnel_audit.pubsub_worker
+```
+
+## Enterprise source adapters
+
+Use `POST /knowledge-base/sync` to pull from configured source adapters and write normalized snapshot documents.
+
+Supported adapters:
+- strategy docs
+- data catalog
+- CMDB
+- telemetry feeds
+- CRM feeds
+- market feeds
+
+Example:
+
+```bash
+export AGENTIC_SOURCE_STRATEGY_DOCS=/path/to/strategy.json
+export AGENTIC_SOURCE_DATA_CATALOG=/path/to/data-catalog.json
+curl -X POST http://localhost:8000/knowledge-base/sync \
+  -H "Content-Type: application/json" \
+  -d '{"source_types": ["strategy_docs", "data_catalog"]}'
+```
+
+Each feed should be a JSON list of records:
+
+```json
+[
+  {
+    "title": "Q3 Strategic Priorities",
+    "content": "Prioritize retention and governed AI execution.",
+    "metadata": {
+      "priority_score": 4,
+      "themes": ["retention", "governance"]
+    }
+  }
+]
+```
+
+## Observability (OpenTelemetry + Dynatrace)
+
+The service now emits traces and metrics across:
+- API routing (`/audit`, `/audit/batch`, `/audit/batch/async`)
+- KB retrieval (`DemoKnowledgeBase.search`)
+- subagent execution (`audit.subagent.evaluate`)
+- end-to-end pipeline runtime (`audit.pipeline.run`)
+
+Metrics now include:
+- confidence histogram per agent (`agentic.audit.confidence`)
+- estimated execution cost (`agentic.audit.estimated_cost_usd`)
+- pipeline duration and run/error counters
+
+Dynatrace setup (OTLP HTTP):
+
+```bash
+export AGENTIC_OTEL_ENABLED=true
+export AGENTIC_OTEL_EXPORTER_OTLP_ENDPOINT=https://<tenant>.live.dynatrace.com/api/v2/otlp
+export AGENTIC_OTEL_EXPORTER_OTLP_HEADERS='Authorization=Api-Token <token>'
+```
 
 ## Incremental rollout recommendation
 
@@ -537,10 +609,9 @@ Quick steps:
 
 ## Next steps
 
-1. keep demo KB as fallback, and add vector, graph, and cache-backed enterprise memory as production mode
-2. operationalize asynchronous ingestion from strategy, data, market, and platform systems with ownership SLAs
-3. evolve local in-memory async queue into a durable actor mesh (Pub/Sub or Kafka plus worker autoscaling)
-4. wrap tool execution behind MCP and zero-trust gateway controls (schema validation, RBAC, OpenTelemetry)
+1. add vector, graph, and cache-backed retrieval implementations behind the current KB abstraction
+2. add durable storage for pub/sub job outputs (Cloud SQL/Firestore/Redis) instead of JSON files
+3. add MCP tool gateway and zero-trust policy enforcement (schema validation and RBAC)
 
 ## License
 

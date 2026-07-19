@@ -1,4 +1,5 @@
 import time
+import json
 
 from fastapi.testclient import TestClient
 
@@ -292,3 +293,26 @@ def test_knowledge_base_ingestion_endpoint():
     assert response.status_code == 200
     assert response.json()["status"] == "accepted"
     assert response.json()["domain"] == "market"
+
+
+def test_knowledge_base_sync_endpoint(tmp_path, monkeypatch):
+    strategy_feed = tmp_path / "strategy.json"
+    strategy_feed.write_text(
+        json.dumps(
+            [
+                {
+                    "title": "Q3 Strategic Priorities",
+                    "content": "Prioritize retention and governed AI execution.",
+                    "metadata": {"priority_score": 4, "themes": ["retention", "governance"]},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AGENTIC_SOURCE_STRATEGY_DOCS", str(strategy_feed))
+
+    response = client.post("/knowledge-base/sync", json={"source_types": ["strategy_docs"]})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+    assert response.json()["ingested_count"] >= 1
