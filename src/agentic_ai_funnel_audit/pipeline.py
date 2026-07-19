@@ -292,6 +292,9 @@ class AuditPipeline:
     ) -> Dict[str, Any]:
         recommended_action = "Proceed with a controlled pilot" if pass_gate else "Rework the proposal before funding"
         investment = self._build_investment_recommendation(strategic, data, architecture, delivery, internal, market, pass_gate)
+        evaluations = [strategic, data, architecture, delivery, internal, market, safety]
+        confidence = self._build_agent_confidence(evaluations)
+        handoff = self._build_human_handoff(evaluations, governance, final_score, pass_gate)
         report = {
             "executive_summary": (
                 f"{idea.get('id', 'idea')} received a {final_score}/5 score and {'passed' if pass_gate else 'did not pass'} the review gate."
@@ -301,6 +304,8 @@ class AuditPipeline:
             "governance_findings": governance.get("findings", []),
             "safety_status": safety.rationale,
             "investment_recommendation": investment,
+            "agent_confidence": confidence,
+            "human_handoff": handoff,
             "evidence_by_agent": {
                 strategic.name: strategic.details.get("evidence", []),
                 data.name: data.details.get("evidence", []),
@@ -326,6 +331,65 @@ class AuditPipeline:
             }
 
         return report
+
+    def _build_agent_confidence(self, evaluations: List[AgentEvaluation]) -> Dict[str, Dict[str, Any]]:
+        confidence: Dict[str, Dict[str, Any]] = {}
+        for evaluation in evaluations:
+            evidence = evaluation.details.get("evidence") or []
+            evidence_count = len(evidence)
+            base = 0.35
+            base += min(0.45, evidence_count * 0.15)
+            if evaluation.details.get("model_operational") or evaluation.details.get("model_market"):
+                base += 0.1
+            if any(key in evaluation.details for key in ["data_readiness", "architecture_readiness", "delivery_capacity"]):
+                base += 0.1
+            confidence_score = round(min(0.95, base), 2)
+            confidence[evaluation.name] = {
+                "score": confidence_score,
+                "band": self._confidence_band(confidence_score),
+                "evidence_count": evidence_count,
+            }
+        return confidence
+
+    def _build_human_handoff(
+        self,
+        evaluations: List[AgentEvaluation],
+        governance: Dict[str, Any],
+        final_score: int,
+        pass_gate: bool,
+    ) -> Dict[str, Any]:
+        confidence = self._build_agent_confidence(evaluations)
+        reasons: list[str] = []
+        low_confidence_agents = [
+            agent_name
+            for agent_name, payload in confidence.items()
+            if payload["score"] < 0.5
+        ]
+        critical_low_score_agents = [evaluation.name for evaluation in evaluations if evaluation.score <= 2]
+
+        if not governance.get("is_safe", True):
+            reasons.append("Governance flagged the idea as unsafe.")
+        if low_confidence_agents:
+            reasons.append("Low confidence evidence for: " + ", ".join(low_confidence_agents) + ".")
+        if critical_low_score_agents:
+            reasons.append("Critical low scores from: " + ", ".join(critical_low_score_agents) + ".")
+        if not pass_gate and final_score <= 2:
+            reasons.append("Overall score is too weak for autonomous progression.")
+
+        required = bool(reasons)
+        priority = "high" if not governance.get("is_safe", True) or final_score <= 2 else ("medium" if required else "low")
+        return {
+            "required": required,
+            "priority": priority,
+            "reasons": reasons,
+        }
+
+    def _confidence_band(self, score: float) -> str:
+        if score >= 0.8:
+            return "high"
+        if score >= 0.6:
+            return "medium"
+        return "low"
 
     def _build_investment_recommendation(
         self,

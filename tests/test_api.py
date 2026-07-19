@@ -1,3 +1,5 @@
+import time
+
 from fastapi.testclient import TestClient
 
 from agentic_ai_funnel_audit.api import app
@@ -43,6 +45,7 @@ def test_audit_endpoint():
     assert "final_score" in response.json()
     assert "report" in response.json()
     assert response.json()["report"]["executive_summary"]
+    assert "human_handoff" in response.json()["report"]
 
 
 def test_batch_audit_endpoint():
@@ -83,6 +86,47 @@ def test_batch_audit_endpoint():
     assert response.json()["count"] == 2
     assert len(response.json()["results"]) == 2
     assert response.json()["results"][0]["idea_id"] == "idea-batch-001"
+
+
+def test_async_batch_audit_job_endpoint():
+    payload = {
+        "ideas": [
+            {
+                "id": "idea-async-001",
+                "title": "Customer churn prevention",
+                "description": "Improve retention with governed AI workflows across CRM, billing, and support.",
+                "business_outcome": "Reduce churn and improve service responsiveness.",
+                "systems_involved": ["crm", "billing", "support"],
+                "required_data_sources": ["crm", "billing", "support"],
+                "dependencies": ["data-platform", "workflow-engine"],
+                "workflow_overlap": 1,
+            }
+        ],
+        "context": {
+            "service_telemetry": {"uptime": 99.9, "slo_breach_count": 0},
+            "incident_history": {"severity": 1},
+            "backlog_health": {"delivery_velocity": 3},
+            "architecture_metadata": {"legacy_systems": 1, "integration_count": 3},
+        },
+    }
+
+    submit_response = client.post("/audit/batch/async", json=payload)
+
+    assert submit_response.status_code == 200
+    job_id = submit_response.json()["job_id"]
+
+    deadline = time.time() + 2
+    latest = None
+    while time.time() < deadline:
+        latest = client.get(f"/audit/jobs/{job_id}")
+        assert latest.status_code == 200
+        if latest.json()["status"] == "completed":
+            break
+        time.sleep(0.05)
+
+    assert latest is not None
+    assert latest.json()["status"] == "completed"
+    assert latest.json()["results"][0]["idea_id"] == "idea-async-001"
 
 
 def test_audits_list_and_artifact_endpoints():

@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .pipeline import AuditPipeline
+from .batch_jobs import BatchAuditJobManager
 from .storage import AuditStore
 from .connectors import OperationalDataFetcher
 from .knowledge_base import load_knowledge_base
@@ -23,6 +24,7 @@ outcome_store = OutcomeStore()
 calibrator = FeedbackLoopCalibrator(outcome_store)
 sync_planner = KnowledgeSyncPlanner()
 snapshot_writer = SnapshotKnowledgeWriter(root=(Path(__file__).resolve().parents[2] / "knowledge_snapshots"))
+batch_job_manager = BatchAuditJobManager(pipeline=pipeline, audit_store=audit_store)
 
 
 class IdeaRequest(BaseModel):
@@ -176,6 +178,23 @@ def audit_batch(payload: BatchAuditPayload):
         "count": len(output),
         "results": output,
     }
+
+
+@app.post("/audit/batch/async")
+def audit_batch_async(payload: BatchAuditPayload):
+    shared_context = payload.context.model_dump() if payload.context else {}
+    shared_context["knowledge_base"] = _resolve_knowledge_base(payload.knowledge_base_mode)
+    ideas = [idea.model_dump() for idea in payload.ideas]
+    job = batch_job_manager.submit(ideas, shared_context)
+    return job.to_dict()
+
+
+@app.get("/audit/jobs/{job_id}")
+def get_audit_job(job_id: str):
+    job = batch_job_manager.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Audit job not found.")
+    return job.to_dict()
 
 
 @app.get("/knowledge-base/status")

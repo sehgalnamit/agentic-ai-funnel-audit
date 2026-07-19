@@ -181,7 +181,14 @@ def load_production_knowledge_base(root: Path | None = None) -> DemoKnowledgeBas
     kb_root = root or Path(__file__).resolve().parents[2] / "knowledge_snapshots"
     if _cached_production_kb is None:
         loaded = DemoKnowledgeBase.from_snapshot_directory(kb_root)
-        _cached_production_kb = loaded if loaded.documents else load_demo_knowledge_base()
+        if not loaded.documents:
+            _cached_production_kb = load_demo_knowledge_base()
+        else:
+            demo = load_demo_knowledge_base()
+            loaded_domains = {document.domain for document in loaded.documents}
+            merged_documents = list(loaded.documents)
+            merged_documents.extend(document for document in demo.documents if document.domain not in loaded_domains)
+            _cached_production_kb = DemoKnowledgeBase(merged_documents)
     return _cached_production_kb
 
 

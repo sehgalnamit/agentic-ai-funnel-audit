@@ -155,7 +155,7 @@ flowchart LR
   - The router should publish work to domain queues instead of invoking all workers in one blocking thread.
   - Each subagent should run as an isolated actor with its own state, retry policy, and queue depth.
   - Loop guards should stop non-deterministic correction cycles and escalate to a human reviewer.
-  - The platform should support both a single idea and a batch of ideas. The API now exposes `POST /audit` and `POST /audit/batch` to reflect both modes.
+  - The platform should support both a single idea and a batch of ideas. The API now exposes `POST /audit`, `POST /audit/batch`, and `POST /audit/batch/async` plus `GET /audit/jobs/{job_id}` for queued local execution.
 
   ### Part 2: The Enterprise Memory Fabric
 
@@ -217,8 +217,13 @@ flowchart LR
   The current app now moves toward this model:
   - users submit idea facts, not self-scores
   - strategic, data, technology, market, and governance agents retrieve evidence from the knowledge base
-  - the pipeline returns score, evidence, and an investment route
+  - the pipeline returns score, evidence, confidence, human handoff guidance, and an investment route
   - a strong idea with weak readiness can be recommended as `fund_foundation_first` instead of being rejected outright
+
+  The technical readiness path is now split into:
+  - `Architecture Readiness Agent`
+  - `Delivery Capacity Agent`
+  - `Internal Operations Agent` as an aggregate readiness view
 
   ## How external trends should be checked
 
@@ -307,6 +312,8 @@ Available endpoints:
 - `GET /` - health check
 - `POST /audit` - submit an idea + context for audit scoring
 - `POST /audit/batch` - submit a batch of ideas for audit scoring
+- `POST /audit/batch/async` - queue a batch job for asynchronous processing
+- `GET /audit/jobs/{job_id}` - inspect queued batch job status and results
 - `GET /audits` - list saved audit entries
 - `GET /audit/{idea_id}` - retrieve a saved audit entry
 - `GET /audit/{idea_id}/artifact` - download the formal audit artifact
@@ -332,6 +339,17 @@ If you want model-driven scoring, set environment variables before running the s
 - `production` mode: reads asynchronously published domain snapshots under `knowledge_snapshots/`
 
 For local development, `production` mode falls back to the demo KB when no snapshots have been published yet. This keeps the app runnable on a laptop while preserving the production operating model.
+
+### Confidence and human handoff
+
+The pipeline now computes:
+- per-agent confidence from evidence depth and grounded signals
+- a `human_handoff` recommendation in the audit report
+
+Warm handoff should be triggered when:
+- governance marks an idea unsafe
+- one or more agents return critical low scores
+- evidence confidence is too weak for autonomous progression
 
 ### Free Groq key for demo use
 
