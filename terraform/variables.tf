@@ -9,6 +9,12 @@ variable "region" {
   description = "GCP region for resources"
 }
 
+variable "firestore_location" {
+  type        = string
+  default     = "us-central"
+  description = "Firestore multi-region location"
+}
+
 variable "enable_model_scoring" {
   type        = bool
   default     = false

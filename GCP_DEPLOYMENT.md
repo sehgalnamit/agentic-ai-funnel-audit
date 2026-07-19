@@ -9,6 +9,7 @@ This guide walks through deploying the agentic AI funnel audit service to Google
 3. **gcloud CLI**: Install and authenticate with your GCP account
 4. **Docker**: For building and pushing container images
 5. **OpenAI API Key** (optional): If you want model-driven scoring
+6. **Firestore**: The Terraform deployment creates the default Firestore database for durable Pub/Sub job state
 
 ## Quick Start
 
@@ -120,6 +121,18 @@ terraform output cloud_run_url
 # Test the health endpoint
 curl https://agentic-ai-funnel-audit-xxxxx-uc.a.run.app/
 ```
+
+## Durable Job State and Tool Gateway
+
+Terraform configures `AGENTIC_JOB_STORE_BACKEND=firestore`; asynchronous Pub/Sub job status and results are shared through the `agentic_audit_jobs` Firestore collection.
+
+Set a protected gateway credential in Secret Manager or the Cloud Run service configuration before enabling tool calls:
+
+```bash
+export AGENTIC_TOOL_GATEWAY_TOKEN=replace-with-a-long-random-value
+```
+
+Use workload identity and Cloud Run service-to-service authentication to reach the protected `/mcp/tools/{tool_name}` routes. The gateway validates tool schemas, enforces agent roles, and only permits registered read-only tools.
 
 ## Testing the Deployment
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from agentic_ai_funnel_audit.pipeline import AuditPipeline
+from agentic_ai_funnel_audit.knowledge_base import DemoKnowledgeBase, KnowledgeDocument
 
 
 def test_audit_pipeline_passes_gate_for_aligned_idea():
@@ -270,3 +271,22 @@ def test_pipeline_adds_confidence_and_handoff_guidance():
     assert result.report["human_handoff"]["priority"] in {"medium", "high"}
     assert "cost_metrics" in result.report
     assert result.report["cost_metrics"]["estimated_execution_cost_usd"] > 0
+
+
+def test_hybrid_retrieval_enforces_document_role_filtering():
+    knowledge_base = DemoKnowledgeBase(
+        [
+            KnowledgeDocument(
+                id="strategy/restricted",
+                domain="strategy",
+                title="Restricted portfolio priority",
+                content="Retention transformation is a priority.",
+                metadata={"allowed_roles": ["auditor"], "themes": ["retention"]},
+            )
+        ]
+    )
+
+    assert knowledge_base.search("strategy", "retention transformation", access_context={"roles": ["reviewer"]}) == []
+    hits = knowledge_base.search("strategy", "retention transformation", access_context={"roles": ["auditor"]})
+    assert len(hits) == 1
+    assert hits[0].document.id == "strategy/restricted"

@@ -316,3 +316,26 @@ def test_knowledge_base_sync_endpoint(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "accepted"
     assert response.json()["ingested_count"] >= 1
+
+
+def test_mcp_tool_gateway_requires_token_and_role(monkeypatch):
+    monkeypatch.setenv("AGENTIC_TOOL_GATEWAY_TOKEN", "gateway-test-token")
+    payload = {"arguments": {"domain": "strategy", "query": "retention"}}
+
+    forbidden = client.post("/mcp/tools/knowledge.search", json=payload)
+    assert forbidden.status_code == 401
+
+    denied = client.post(
+        "/mcp/tools/knowledge.search",
+        json=payload,
+        headers={"X-Tool-Gateway-Token": "gateway-test-token", "X-Agent-Roles": "untrusted"},
+    )
+    assert denied.status_code == 403
+
+    allowed = client.post(
+        "/mcp/tools/knowledge.search",
+        json=payload,
+        headers={"X-Tool-Gateway-Token": "gateway-test-token", "X-Agent-Roles": "auditor"},
+    )
+    assert allowed.status_code == 200
+    assert "hits" in allowed.json()["result"]

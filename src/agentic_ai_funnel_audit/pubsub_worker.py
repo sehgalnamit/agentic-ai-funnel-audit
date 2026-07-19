@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .durable_jobs import DurableJobStore
+from .durable_jobs import create_durable_job_store
 from .knowledge_base import load_knowledge_base
 from .pipeline import AuditPipeline
 from .storage import AuditStore
@@ -23,7 +23,7 @@ def run_pubsub_worker() -> None:
 
     pipeline = AuditPipeline()
     audit_store = AuditStore()
-    jobs = DurableJobStore(Path(os.getenv("AGENTIC_JOB_STORE_DIR", "runtime_jobs")))
+    jobs = create_durable_job_store(Path(os.getenv("AGENTIC_JOB_STORE_DIR", "runtime_jobs")))
 
     subscriber = pubsub_v1.SubscriberClient()
 

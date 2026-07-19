@@ -65,6 +65,16 @@ resource "google_cloud_run_service" "agentic_audit" {
           value = var.enable_model_scoring ? "true" : "false"
         }
 
+        env {
+          name  = "AGENTIC_JOB_STORE_BACKEND"
+          value = "firestore"
+        }
+
+        env {
+          name  = "AGENTIC_FIRESTORE_JOB_COLLECTION"
+          value = "agentic_audit_jobs"
+        }
+
         ports {
           container_port = 8000
         }
@@ -133,6 +143,19 @@ resource "google_storage_bucket" "audit_logs" {
   }
 }
 
+# Shared durable state for asynchronous jobs across Cloud Run instances.
+resource "google_firestore_database" "audit_jobs" {
+  name        = "(default)"
+  location_id = var.firestore_location
+  type        = "FIRESTORE_NATIVE"
+}
+
+resource "google_project_iam_member" "firestore_job_access" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.agentic_audit.email}"
+}
+
 # Pub/Sub Topic for event-driven idea submission
 resource "google_pubsub_topic" "idea_intake" {
   name = "agentic-ai-funnel-audit-ideas"
@@ -149,7 +172,7 @@ resource "google_pubsub_subscription" "idea_intake_subscription" {
   project = var.project_id
 
   push_config {
-    push_endpoint = google_cloud_run_service.agentic_audit.status[0].url
+    push_endpoint = "${google_cloud_run_service.agentic_audit.status[0].url}/events/pubsub"
 
     oidc_token_audience {
       audience = google_cloud_run_service.agentic_audit.status[0].url
@@ -184,4 +207,9 @@ output "pubsub_topic" {
 output "storage_bucket" {
   value       = google_storage_bucket.audit_logs.name
   description = "GCS bucket for audit logs"
+}
+
+output "firestore_database" {
+  value       = google_firestore_database.audit_jobs.name
+  description = "Firestore database used for durable async job state"
 }

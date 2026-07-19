@@ -59,7 +59,7 @@ class StrategicAlignmentAgent(Agent):
         explicit = idea.get("strategic_fit")
         kb = self._knowledge_base(context)
         query = _build_query(idea, "title", "description", "business_outcome", "target_users", "kpi_target")
-        hits = kb.search("strategy", query, limit=3) if kb and query else []
+        hits = kb.search("strategy", query, limit=3, access_context=context.get("access_context")) if kb and query else []
 
         if explicit is not None:
             score = _clamp_score(explicit)
@@ -101,7 +101,7 @@ class DataReadinessAgent(Agent):
         required_items = _csv_items(required_sources)
         kb = self._knowledge_base(context)
         query = " ".join(required_items) or _build_query(idea, "description", "business_outcome", "title")
-        hits = kb.search("data", query, limit=3) if kb and query else []
+        hits = kb.search("data", query, limit=3, access_context=context.get("access_context")) if kb and query else []
 
         matched_sources: set[str] = set()
         kb_scores: list[int] = []
@@ -150,7 +150,7 @@ class ArchitectureReadinessAgent(Agent):
         architecture_metadata = context.get("architecture_metadata") or {}
         kb = self._knowledge_base(context)
         query = " ".join(dependency_list) or _build_query(idea, "description", "title", "current_process")
-        tech_hits = kb.search("technology", query, limit=3) if kb and query else []
+        tech_hits = kb.search("technology", query, limit=3, access_context=context.get("access_context")) if kb and query else []
 
         risk_penalty = 0
         risk_penalty += min(3, len(dependency_list))
@@ -272,7 +272,7 @@ class MarketSignalAgent(Agent):
         explicit_risk = idea.get("market_risk")
         kb = self._knowledge_base(context)
         query = _build_query(idea, "title", "description", "business_outcome", "target_users")
-        hits = kb.search("market", query, limit=3) if kb and query else []
+        hits = kb.search("market", query, limit=3, access_context=context.get("access_context")) if kb and query else []
 
         if hits:
             trend_score = round(sum(int(hit.document.metadata.get("trend_score", 3)) for hit in hits) / len(hits))

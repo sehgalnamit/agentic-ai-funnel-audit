@@ -1,10 +1,11 @@
 from typing import Any
 import asyncio
+import base64
 import json
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,7 +17,8 @@ from .knowledge_base import load_knowledge_base
 from .knowledge_ingestion import KnowledgeIngestionJob, KnowledgeSyncPlanner, SnapshotKnowledgeWriter
 from .source_adapters import build_default_adapters
 from .outcomes import OutcomeStore, OutcomeRecord, FeedbackLoopCalibrator
-from .durable_jobs import DurableJobStore
+from .durable_jobs import create_durable_job_store
+from .tool_gateway import ToolDefinition, ToolGateway, ToolGatewayError
 from .observability import observability
 
 app = FastAPI(title="Agentic AI Funnel Audit")
@@ -29,8 +31,9 @@ calibrator = FeedbackLoopCalibrator(outcome_store)
 sync_planner = KnowledgeSyncPlanner()
 snapshot_writer = SnapshotKnowledgeWriter(root=(Path(__file__).resolve().parents[2] / "knowledge_snapshots"))
 batch_job_manager = BatchAuditJobManager(pipeline=pipeline, audit_store=audit_store)
-durable_job_store = DurableJobStore(Path(os.getenv("AGENTIC_JOB_STORE_DIR", "runtime_jobs")))
+durable_job_store = create_durable_job_store(Path(os.getenv("AGENTIC_JOB_STORE_DIR", "runtime_jobs")))
 source_adapters = build_default_adapters()
+tool_gateway = ToolGateway()
 
 
 class IdeaRequest(BaseModel):
@@ -109,9 +112,77 @@ class KnowledgeSyncRequest(BaseModel):
     source_types: list[str] = Field(default_factory=list)
 
 
+class ToolInvocationRequest(BaseModel):
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    roles: list[str] = Field(default_factory=list)
+
+
+def _tool_search_knowledge(arguments: dict[str, Any], identity: dict[str, Any]) -> dict[str, Any]:
+    kb = _resolve_knowledge_base(arguments.get("knowledge_base_mode"))
+    return {
+        "hits": [
+            hit.to_dict()
+            for hit in kb.search(
+                domain=str(arguments["domain"]),
+                query=str(arguments["query"]),
+                limit=min(10, max(1, int(arguments.get("limit", 3)))),
+                access_context=identity,
+            )
+        ]
+    }
+
+
+def _tool_get_audit(arguments: dict[str, Any], identity: dict[str, Any]) -> dict[str, Any]:
+    _ = identity
+    entry = audit_store.get(str(arguments["idea_id"]))
+    if not entry:
+        raise ToolGatewayError("Audit entry not found.", status_code=404)
+    return {"idea_id": entry.idea_id, "created_at": entry.created_at, "payload": entry.payload}
+
+
+tool_gateway.register(
+    ToolDefinition(
+        name="knowledge.search",
+        allowed_roles={"auditor", "retriever", "reviewer"},
+        required_fields={"domain", "query"},
+        handler=_tool_search_knowledge,
+    )
+)
+tool_gateway.register(
+    ToolDefinition(
+        name="audit.get",
+        allowed_roles={"auditor", "reviewer"},
+        required_fields={"idea_id"},
+        handler=_tool_get_audit,
+    )
+)
+
+
 @app.get("/")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/mcp/tools")
+def list_mcp_tools(x_agent_roles: str = Header(default="")):
+    roles = [role.strip() for role in x_agent_roles.split(",") if role.strip()]
+    return {"protocol": "mcp-tool-gateway", "tools": tool_gateway.describe(roles)}
+
+
+@app.post("/mcp/tools/{tool_name}")
+def invoke_mcp_tool(
+    tool_name: str,
+    payload: ToolInvocationRequest,
+    x_agent_roles: str = Header(default=""),
+    x_tool_gateway_token: str | None = Header(default=None),
+):
+    header_roles = [role.strip() for role in x_agent_roles.split(",") if role.strip()]
+    identity = {"roles": header_roles or payload.roles}
+    try:
+        result = tool_gateway.execute(tool_name, payload.arguments, identity, x_tool_gateway_token)
+    except ToolGatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return {"tool": tool_name, "result": result}
 
 
 @app.post("/audit")
@@ -223,6 +294,52 @@ def audit_batch_async(payload: BatchAuditPayload):
         response = job.to_dict()
         response["backend"] = "local"
         return response
+
+
+@app.post("/events/pubsub")
+def consume_pubsub_batch_event(payload: dict[str, Any]):
+    """Cloud Run Pub/Sub push target for durable batch execution."""
+    try:
+        encoded = payload["message"]["data"]
+        envelope = json.loads(base64.b64decode(encoded).decode("utf-8"))
+        job_id = str(envelope["job_id"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid Pub/Sub job envelope.") from exc
+
+    durable_job = durable_job_store.get(job_id)
+    if durable_job is None:
+        raise HTTPException(status_code=404, detail="Durable job was not found.")
+    if durable_job.status == "completed":
+        return {"status": "already_completed", "job_id": job_id}
+
+    try:
+        durable_job_store.mark_running(job_id)
+        context = dict(envelope.get("context") or {})
+        context["knowledge_base"] = _resolve_knowledge_base(envelope.get("knowledge_base_mode"))
+        ideas = list(envelope.get("ideas") or [])
+        results = pipeline.run_batch(ideas, context)
+        output = []
+        for result, idea in zip(results, ideas):
+            audit_store.save(
+                idea_id=result.idea_id,
+                payload={
+                    "idea": idea,
+                    "context": {key: value for key, value in context.items() if key != "knowledge_base"},
+                    "result": {
+                        "final_score": result.final_score,
+                        "pass_gate": result.pass_gate,
+                        "iso_scores": result.iso_scores,
+                        "report": result.report,
+                        "artifact": result.artifact,
+                    },
+                },
+            )
+            output.append({"idea_id": result.idea_id, "final_score": result.final_score, "pass_gate": result.pass_gate})
+        durable_job_store.mark_completed(job_id, output)
+        return {"status": "completed", "job_id": job_id}
+    except Exception as exc:
+        durable_job_store.mark_failed(job_id, str(exc))
+        raise HTTPException(status_code=500, detail="Pub/Sub job processing failed.") from exc
 
 
 @app.get("/audit/jobs/{job_id}")

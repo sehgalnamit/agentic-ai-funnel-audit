@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from typing import Any, Iterable
 
+from .hybrid_retrieval import HybridRetrievalEngine
 from .observability import observability
 
 
@@ -81,6 +82,7 @@ class KnowledgeDomainStatus:
 class DemoKnowledgeBase:
     def __init__(self, documents: Iterable[KnowledgeDocument]):
         self.documents = list(documents)
+        self.retrieval = HybridRetrievalEngine(self.documents)
 
     @classmethod
     def from_directory(cls, root: Path) -> "DemoKnowledgeBase":
@@ -123,7 +125,13 @@ class DemoKnowledgeBase:
             )
         return cls(documents)
 
-    def search(self, domain: str, query: str, limit: int = 3) -> list[KnowledgeHit]:
+    def search(
+        self,
+        domain: str,
+        query: str,
+        limit: int = 3,
+        access_context: dict[str, Any] | None = None,
+    ) -> list[KnowledgeHit]:
         with observability.timed_span(
             "audit.retrieval.search",
             {
@@ -131,24 +139,18 @@ class DemoKnowledgeBase:
                 "kb.limit": limit,
             },
         ):
-            domain_docs = [doc for doc in self.documents if doc.domain == domain]
-            query_tokens = _tokenize(query)
-            hits: list[KnowledgeHit] = []
-            for document in domain_docs:
-                searchable = " ".join(
-                    [document.title, document.content, " ".join(_flatten_metadata(document.metadata))]
-                )
-                doc_tokens = _tokenize(searchable)
-                overlap = query_tokens & doc_tokens
-                if not overlap:
-                    continue
-                metadata_score = sum(
-                    value for key, value in document.metadata.items() if key.endswith("_score") and isinstance(value, int)
-                )
-                score = float(len(overlap)) + (metadata_score / 10.0)
-                hits.append(KnowledgeHit(document=document, score=score, excerpt=_build_excerpt(document.content, overlap)))
-            hits.sort(key=lambda item: item.score, reverse=True)
-            return hits[:limit]
+            return self.retrieval.search(
+                domain=domain,
+                query=query,
+                limit=limit,
+                tokenize=_tokenize,
+                make_hit=lambda document, score, overlap: KnowledgeHit(
+                    document=document,
+                    score=score,
+                    excerpt=_build_excerpt(document.content, overlap),
+                ),
+                access_context=access_context,
+            )
 
     def grouped_documents(self) -> dict[str, list[KnowledgeDocument]]:
         grouped: dict[str, list[KnowledgeDocument]] = {}

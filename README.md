@@ -380,7 +380,14 @@ If you want model-driven scoring, set environment variables before running the s
 - `AGENTIC_ASYNC_BACKEND=local|pubsub` - choose local in-memory queue or Pub/Sub publish path for `POST /audit/batch/async`
 - `AGENTIC_PUBSUB_TOPIC=projects/<project>/topics/<topic>` - required only when `AGENTIC_ASYNC_BACKEND=pubsub`
 - `AGENTIC_PUBSUB_SUBSCRIPTION=projects/<project>/subscriptions/<subscription>` - required for the Pub/Sub worker service
-- `AGENTIC_JOB_STORE_DIR=runtime_jobs` - JSON-backed durable async job state store path
+- `AGENTIC_JOB_STORE_BACKEND=file|firestore` - select local files or managed Firestore durable job storage
+- `AGENTIC_JOB_STORE_DIR=runtime_jobs` - local file-backed job state path
+- `AGENTIC_FIRESTORE_JOB_COLLECTION=agentic_audit_jobs` - Firestore collection for shared job state
+- `AGENTIC_RETRIEVAL_CACHE_BACKEND=local|redis` - select local or Redis hybrid-retrieval cache
+- `AGENTIC_REDIS_URL=redis://...` - required when Redis retrieval cache is selected
+- `AGENTIC_RETRIEVAL_CACHE_TTL_SECONDS=300` - retrieval cache TTL
+- `AGENTIC_TOOL_GATEWAY_TOKEN=<secret>` - shared credential required to invoke protected tool gateway routes
+- `AGENTIC_MCP_WORKLOAD_ROLE=retriever` - role assigned to the stdio MCP workload identity
 - `AGENTIC_OTEL_ENABLED=true` - enable OpenTelemetry instrumentation
 - `AGENTIC_OTEL_EXPORTER_OTLP_ENDPOINT=https://<tenant>.live.dynatrace.com/api/v2/otlp` - Dynatrace OTLP endpoint
 - `AGENTIC_OTEL_EXPORTER_OTLP_HEADERS=Authorization=Api-Token <token>` - OTLP auth header
@@ -528,6 +535,23 @@ export AGENTIC_OTEL_EXPORTER_OTLP_ENDPOINT=https://<tenant>.live.dynatrace.com/a
 export AGENTIC_OTEL_EXPORTER_OTLP_HEADERS='Authorization=Api-Token <token>'
 ```
 
+## Hybrid Retrieval and Tool Security
+
+Knowledge retrieval combines lexical relevance, deterministic vector similarity, graph-style metadata links, and a TTL cache. Local mode uses in-process vector and cache implementations; production can share cached results through Redis.
+
+Documents can set `allowed_roles` in metadata. The retrieval layer filters documents before they are ranked or included in agent context.
+
+The service exposes a governed tool boundary:
+- `GET /mcp/tools` lists tools available to the supplied `X-Agent-Roles` identity
+- `POST /mcp/tools/{tool_name}` requires `X-Tool-Gateway-Token`, validates required arguments, checks RBAC, and permits only allow-listed tools
+- `agentic-ai-funnel-mcp` starts the MCP stdio server for controlled workload integration
+
+The current allow-listed tools are read-only: `knowledge.search` and `audit.get`. This keeps retrieval and audit inspection inside an authenticated, schema-validated execution boundary.
+
+## Durable Async Processing
+
+Local development uses file-backed job state. GCP deployment sets `AGENTIC_JOB_STORE_BACKEND=firestore`, so API and Cloud Run worker instances share durable job state. The Pub/Sub subscription delivers batch messages to `/events/pubsub`, which performs idempotent status checks before processing and persists completed or failed results in Firestore.
+
 ## Incremental rollout recommendation
 
 1. Start with local demo mode for baseline checks.
@@ -666,12 +690,6 @@ Quick steps:
 2. Use Terraform to provision Cloud Run, secrets, and event-driven infrastructure
 3. Set secret values for API keys and data source configurations
 4. Access the service via the Cloud Run URL
-
-## Next steps
-
-1. add vector, graph, and cache-backed retrieval implementations behind the current KB abstraction
-2. add durable storage for pub/sub job outputs (Cloud SQL/Firestore/Redis) instead of JSON files
-3. add MCP tool gateway and zero-trust policy enforcement (schema validation and RBAC)
 
 ## License
 
